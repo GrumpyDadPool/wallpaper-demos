@@ -32,8 +32,19 @@
     opacity:0; transition:opacity .35s, transform .35s; pointer-events:none; white-space:nowrap;
   }
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  #dock {
+    position:fixed; left:0; right:0; bottom:calc(env(safe-area-inset-bottom, 0px) + 8px); z-index:6;
+    display:flex; gap:6px; overflow-x:auto; padding:4px 10px; scrollbar-width:none;
+  }
+  #dock::-webkit-scrollbar { display:none; }
+  #dock button {
+    flex:none; font:600 11.5px/1 system-ui, sans-serif; letter-spacing:.03em; color:#e8ebff;
+    background:rgba(14,18,42,.72); border:1px solid rgba(140,160,255,.35); border-radius:999px;
+    padding:9px 12px; backdrop-filter:blur(8px); cursor:pointer; white-space:nowrap;
+  }
+  #dock button:active { background:rgba(70,90,200,.55); }
   #evBtn {
-    position:fixed; right:12px; bottom:calc(env(safe-area-inset-bottom, 0px) + 14px); z-index:6;
+    position:fixed; left:12px; bottom:calc(env(safe-area-inset-bottom, 0px) + 62px); z-index:6;
     font:600 13px/1 system-ui, sans-serif; letter-spacing:.08em; color:#eef1ff;
     background:rgba(16,20,46,.78); border:1px solid rgba(140,160,255,.4); border-radius:999px; padding:11px 16px;
     backdrop-filter: blur(8px); cursor:pointer;
@@ -78,12 +89,12 @@
   <div class="hint">touch the sky to feed the hole &nbsp;·&nbsp; drag for a comet</div>
 </div>
 <button id="evBtn">⚡ EVENTS</button>
+<div id="dock"></div>
 <div id="panel">
   <button id="closePanel">✕</button>
   <h3>Sky</h3>
   <div class="chips" id="skyChips"></div>
-  <h3>Simulate a phone event</h3>
-  <div class="chips" id="simChips"></div>
+  <div class="note" style="margin:2px 0 10px">Trigger events any time from the bar at the bottom of the screen — no need to open this panel.</div>
   <h3>My triggers</h3>
   <div id="ruleList"></div>
   <h3>Add your own trigger</h3>
@@ -493,11 +504,11 @@ void main() {
     });
     skyChips.appendChild(b);
   }
-  const simChips = document.getElementById('simChips');
+  const simChips = document.getElementById('dock');
   for (const key of Object.keys(EVENTS)) {
     const b = document.createElement('button');
-    b.className = 'chip'; b.textContent = EVENTS[key];
-    b.addEventListener('click', () => fireEvent(key));
+    b.textContent = EVENTS[key];
+    b.addEventListener('click', () => fireEvent(key, true));
     simChips.appendChild(b);
   }
   const srcSel = document.getElementById('evSource'), fxSel = document.getElementById('evEffect');
