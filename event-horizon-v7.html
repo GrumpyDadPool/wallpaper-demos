@@ -180,10 +180,18 @@ void main() {
   vec3 bg = texture2D(uTex, clamp(bgUV, 0.001, 0.999)).rgb;
   bg *= mix(vec3(1.0), vec3(1.07, 1.0, 0.92), uAmb * 0.6);
   vec3 col = bg * 0.9;
+  {
+    vec2 c1 = uCenter + vec2(uGR * 1.02, -uGR * 0.62);
+    float d1 = length((fc + uPar * 0.6 - c1) / vec2(1.0, 0.78));
+    col += vec3(1.10, 1.00, 0.85) * exp(-d1 / (uGR * 0.055)) * 0.50;
+    vec2 c2 = uCenter + vec2(-uGR * 0.98, uGR * 0.62);
+    vec2 o2 = rot(fc + uPar * 0.6 - c2, 0.6) / vec2(1.0, 0.55);
+    col += vec3(0.95, 0.92, 0.80) * exp(-length(o2) / (uGR * 0.085)) * 0.26;
+  }
 
   // ---- the galaxy ----
   float tilt = -0.35;
-  float incl = 0.60;                       // inclination squash: fairly face-on
+  float incl = 0.42;                       // inclination squash: Andromeda-steep
   vec2 pr = rot(p, tilt);
   vec2 q = vec2(pr.x, pr.y / incl);
   float rq = length(q) / gr;               // plane radius, 0..1 = disk edge
@@ -193,14 +201,17 @@ void main() {
     // differential rotation: inner material laps the outer
     float rotA = uRot / (0.22 + rq * 1.6);
     // spiral arms in the rotating frame (logarithmic twist)
-    float s = ang + rotA - 4.2 * log(max(rq, 0.03));
+    float s = ang + rotA - 5.2 * log(max(rq, 0.03));
     float arms = pow(0.5 + 0.5 * cos(2.0 * s), 3.0);
     // clumps that orbit with the galaxy (cartesian noise, seamless)
     vec2 rp = rot(vec2(q.x, q.y) / gr, rotA) * 5.0;
     float clumps = fbm(rp + vec2(rq * 3.0, -rq * 2.0));
     float clumps2 = fbm(rp * 2.3 - vec2(rq * 4.0, 0.0));
     // dust lanes hug the inner edge of each arm
-    float dust = pow(0.5 + 0.5 * cos(2.0 * (s + 0.6)), 4.0) * (1.0 - rq) * 0.55;
+    float dust = pow(0.5 + 0.5 * cos(2.0 * (s + 0.6)), 4.0) * (1.0 - rq) * 0.85;
+    float lane = exp(-pow((rq - 0.52) * 9.0, 2.0)) + 0.7 * exp(-pow((rq - 0.74) * 11.0, 2.0));
+    float front = smoothstep(-0.15, 0.6, pr.y / gr);
+    dust += lane * (0.35 + 0.45 * arms) * (0.7 + 0.55 * front);
     // radial falloff of the disk
     float diskProfile = smoothstep(1.05, 0.5, rq) * smoothstep(0.0, 0.10, rq);
     float density = arms * (0.30 + 1.05 * clumps + 0.45 * clumps2) * diskProfile;
@@ -212,6 +223,8 @@ void main() {
     float knot = smoothstep(0.60, 0.92, fbm(rp * 1.4 + 31.0)) * arms * diskProfile;
     vec3 gal = armCol * density * sparkle;
     gal += vec3(1.30, 0.42, 0.60) * knot * 1.35;
+    float ringBand = exp(-pow((rq - 0.78) * 8.0, 2.0));
+    gal += vec3(0.45, 0.60, 1.25) * ringBand * arms * (0.4 + 0.6 * clumps2) * 0.55;
     gal *= (1.05 + uFlare * 0.9 + uLoad * 0.35);
     float glint = vnoise(rot(vec2(q.x, q.y) / gr, rotA * 1.35) * 26.0 + vec2(uTime * 0.5, -uTime * 0.35));
     gal += armCol * density * smoothstep(0.74, 1.0, glint) * 0.85;
@@ -231,9 +244,11 @@ void main() {
       col += vec3(1.15, 1.1, 1.05) * exp(-d * d / (gr * gr * 0.0011)) * (0.5 + seed * 0.7) * tw2;
     }
     // the bright heart: galactic bulge + core
-    float bulge = exp(-rq * 5.0);
+    float bulge = exp(-rq * 3.1);
+    float bar = exp(-rq * 4.2) * pow(abs(cos(ang + rotA)), 6.0);
     float core = exp(-rq * 20.0);
-    vec3 heart = vec3(1.22, 1.05, 0.80) * bulge * (0.85 + 0.25 * sin(uTime * 0.8) * 0.3 + uFlare * 1.1);
+    vec3 heart = vec3(1.24, 1.04, 0.74) * bulge * (0.95 + 0.25 * sin(uTime * 0.8) * 0.3 + uFlare * 1.1);
+    heart += vec3(1.20, 1.00, 0.70) * bar * 0.38;
     heart += vec3(1.3, 1.18, 1.0) * core * (1.6 + uFlare * 2.2);
     col += gal * 1.35 + heart;
     // wide soft halo of the galaxy's light
@@ -721,7 +736,7 @@ void main() {
       if (p >= 1) { shows.splice(i, 1); continue; }
       const fadeIO = Math.sin(Math.PI * Math.min(1, p * 1.15));
       if (sh.kind === 'solarflare') {
-        const rim = (ang) => { const ex = Math.cos(ang) * hr, ey = Math.sin(ang) * hr * 0.6; const c = Math.cos(-0.35), s = Math.sin(-0.35); return { x: hp.x + ex * c - ey * s, y: hp.y + ex * s + ey * c }; };
+        const rim = (ang) => { const ex = Math.cos(ang) * hr, ey = Math.sin(ang) * hr * 0.42; const c = Math.cos(-0.35), s = Math.sin(-0.35); return { x: hp.x + ex * c - ey * s, y: hp.y + ex * s + ey * c }; };
         const A = rim(sh.a), B = rim(sh.a + 0.55), mid = rim(sh.a + 0.27);
         const lift = 1 + 0.55 * Math.sin(Math.PI * p);
         const mx = hp.x + (mid.x - hp.x) * lift, my = hp.y + (mid.y - hp.y) * lift;
