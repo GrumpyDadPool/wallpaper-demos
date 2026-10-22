@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Event Horizon — Interactive Wallpaper Demo v5</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#030308; }
+  #stage { position:fixed; inset:0; will-change:transform; }
+  #gl, #fx { position:absolute; inset:0; display:block; }
+  #fx { touch-action:none; }
+  #hud {
+    position:fixed; left:0; right:0; bottom:calc(env(safe-area-inset-bottom, 0px) + 64px);
+    text-align:center; pointer-events:none; font-family:Georgia, 'Times New Roman', serif;
+    color:rgba(230,235,255,.82); text-shadow:0 1px 8px rgba(0,0,0,.9); z-index:3;
+  }
+  #hud .name { font-size:19px; letter-spacing:.42em; text-transform:uppercase; }
+  #hud .hint { font-size:12.5px; letter-spacing:.14em; opacity:.62; margin-top:6px; font-style:italic; }
+  #fade { position:fixed; inset:0; background:#030308; pointer-events:none; transition:opacity 1.8s ease; z-index:9; }
+  #loadChip {
+    position:fixed; top:calc(env(safe-area-inset-top, 0px) + 12px); right:12px; z-index:4;
+    font:11px/1.5 system-ui, sans-serif; letter-spacing:.12em; color:rgba(220,228,255,.85);
+    background:rgba(10,12,28,.55); border:1px solid rgba(140,160,255,.25); border-radius:999px; padding:5px 11px;
+    backdrop-filter: blur(6px); display:flex; align-items:center; gap:7px;
+  }
+  #loadBarWrap { width:52px; height:5px; border-radius:3px; background:rgba(255,255,255,.14); overflow:hidden; display:inline-block; }
+  #loadBar { height:100%; width:0%; background:linear-gradient(90deg,#7fd0ff,#c99aff); transition:width .3s; display:block; }
+  #toast {
+    position:fixed; top:calc(env(safe-area-inset-top, 0px) + 52px); left:50%; transform:translateX(-50%) translateY(-8px);
+    z-index:5; font:12.5px/1.4 system-ui, sans-serif; letter-spacing:.06em; color:#eef1ff;
+    background:rgba(12,14,34,.72); border:1px solid rgba(140,160,255,.35); border-radius:999px; padding:7px 14px;
+    opacity:0; transition:opacity .35s, transform .35s; pointer-events:none; white-space:nowrap;
+  }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  #evBtn {
+    position:fixed; right:12px; bottom:calc(env(safe-area-inset-bottom, 0px) + 14px); z-index:6;
+    font:600 13px/1 system-ui, sans-serif; letter-spacing:.08em; color:#eef1ff;
+    background:rgba(16,20,46,.78); border:1px solid rgba(140,160,255,.4); border-radius:999px; padding:11px 16px;
+    backdrop-filter: blur(8px); cursor:pointer;
+  }
+  #panel {
+    position:fixed; left:0; right:0; bottom:0; z-index:7; max-height:62vh; overflow-y:auto;
+    background:rgba(8,10,26,.92); border-top:1px solid rgba(140,160,255,.3); backdrop-filter: blur(10px);
+    color:#dfe6ff; font:13.5px/1.45 system-ui, sans-serif; padding:14px 16px calc(env(safe-area-inset-bottom, 0px) + 18px);
+    transform:translateY(105%); transition:transform .38s ease;
+  }
+  #panel.open { transform:translateY(0); }
+  #panel h3 { margin:12px 0 7px; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:#9fb2ff; }
+  #panel h3:first-child { margin-top:2px; }
+  .chips { display:flex; flex-wrap:wrap; gap:7px; }
+  .chip {
+    font:12.5px/1 system-ui, sans-serif; color:#eef1ff; background:rgba(40,48,96,.6);
+    border:1px solid rgba(140,160,255,.35); border-radius:999px; padding:8px 12px; cursor:pointer;
+  }
+  .chip:active { background:rgba(90,104,190,.7); }
+  .ruleRow { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid rgba(140,160,255,.12); }
+  .ruleRow .txt { flex:1; }
+  .ruleRow .del { color:#ff9d9d; background:none; border:1px solid rgba(255,157,157,.35); border-radius:8px; padding:4px 9px; cursor:pointer; font-size:12px; }
+  .builder { display:flex; flex-wrap:wrap; gap:7px; align-items:center; }
+  select {
+    flex:1; min-width:128px; background:rgba(24,28,58,.9); color:#eef1ff; border:1px solid rgba(140,160,255,.35);
+    border-radius:9px; padding:9px 8px; font-size:13px;
+  }
+  #addRule { background:rgba(70,90,200,.75); border:1px solid rgba(160,180,255,.5); color:#fff; border-radius:9px; padding:9px 14px; font-size:13px; cursor:pointer; }
+  .note { opacity:.55; font-size:12px; margin-top:10px; }
+  #closePanel { float:right; background:none; border:none; color:#9fb2ff; font-size:18px; cursor:pointer; padding:2px 6px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="gl"></canvas>
+  <canvas id="fx"></canvas>
+</div>
+<div id="loadChip">LOAD <span id="loadBarWrap"><span id="loadBar"></span></span></div>
+<div id="toast"></div>
+<div id="hud">
+  <div class="name">Event Horizon</div>
+  <div class="hint">touch the sky to feed the hole &nbsp;·&nbsp; drag for a comet</div>
+</div>
+<button id="evBtn">⚡ EVENTS</button>
+<div id="panel">
+  <button id="closePanel">✕</button>
+  <h3>Sky</h3>
+  <div class="chips" id="skyChips"></div>
+  <h3>Simulate a phone event</h3>
+  <div class="chips" id="simChips"></div>
+  <h3>My triggers</h3>
+  <div id="ruleList"></div>
+  <h3>Add your own trigger</h3>
+  <div class="builder">
+    <select id="evSource"></select>
+    <span>→</span>
+    <select id="evEffect"></select>
+    <button id="addRule">Add</button>
+  </div>
+  <div class="note">Rules are saved on this device. Real signals are live in this demo too: battery charge state, connection loss/return, returning to the screen (the unlock stand-in), and the top of the hour all fire their events for real. In the phone app these same slots take the real system events.</div>
+</div>
+<div id="fade"></div>
+
+<script id="vs" type="x-shader/x-vertex">
+attribute vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+</script>
+<script id="fs" type="x-shader/x-fragment">
+precision highp float;
+uniform sampler2D uTex;
+uniform vec2 uRes;
+uniform vec2 uTexRes;
+uniform vec2 uCenter;   // galaxy center, pixels, y-down screen space
+uniform float uGR;      // galaxy outer radius, pixels
+uniform float uTime;
+uniform float uRot;     // accumulated rotation, radians
+uniform float uFlare;
+uniform float uLoad;
+uniform float uAmb;     // dawn/dusk warmth 0..1
+uniform vec2 uPar;      // parallax offset, pixels
+uniform vec2 uBHC;      // black-hole gauge center, pixels
+uniform float uBHRS;    // black-hole shadow radius, pixels
+uniform float uBHLevel; // battery level 0..1
+uniform float uBHChg;   // charging activity 0..1
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash(i), b = hash(i + vec2(1.0, 0.0)), c = hash(i + vec2(0.0, 1.0)), d = hash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+float fbm(vec2 p) {
+  float v = 0.0, amp = 0.55;
+  for (int i = 0; i < 4; i++) { v += amp * vnoise(p); p = p * 2.03 + vec2(17.3, 9.1); amp *= 0.5; }
+  return v;
+}
+vec2 rot(vec2 v, float a) { float c = cos(a), s = sin(a); return vec2(c * v.x - s * v.y, s * v.x + c * v.y); }
+
+vec3 heatRamp(float t) {
+  vec3 c1 = vec3(1.25, 1.18, 1.05);
+  vec3 c2 = vec3(1.15, 0.78, 0.38);
+  vec3 c3 = vec3(0.85, 0.32, 0.10);
+  vec3 c4 = vec3(0.30, 0.06, 0.02);
+  vec3 col = mix(c1, c2, smoothstep(0.0, 0.38, t));
+  col = mix(col, c3, smoothstep(0.38, 0.72, t));
+  col = mix(col, c4, smoothstep(0.72, 1.0, t));
+  return col;
+}
+vec3 bhDisk(float rq, float ang, float heat, float act) {
+  float inner = 1.5, outer = 4.8;
+  float t = clamp((rq - inner) / (outer - inner), 0.0, 1.0);
+  float a2 = ang + (uTime * (0.8 + act * 2.4)) * 2.4 / pow(rq, 1.5);
+  vec2 rp = rot(vec2(cos(ang), sin(ang)) * rq, a2 - ang);
+  float n = fbm(rp * vec2(2.6, 7.5));
+  float turb = 0.45 + 0.85 * n;
+  float beam = 1.0 + 0.55 * sin(ang + 0.7);
+  vec3 c = heatRamp(t);
+  c = mix(c, c * vec3(0.82, 0.92, 1.30), clamp(sin(ang + 0.7), 0.0, 1.0) * 0.38);
+  float edge = smoothstep(inner * 0.96, inner * 1.18, rq) * (1.0 - smoothstep(outer * 0.72, outer, rq));
+  return c * turb * beam * edge * 1.6 * heat;
+}
+
+void main() {
+  vec2 fc = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y); // y-down
+  vec2 p = fc - uCenter;
+  float gr = uGR;
+
+  // ---- background plate (no lensing now; gentle parallax only) ----
+  float coverScale = max(uRes.x / uTexRes.x, uRes.y / uTexRes.y);
+  vec2 bgUV = (fc + uPar - uRes * 0.5) / (uTexRes * coverScale) + 0.5;
+  bgUV.y = 1.0 - bgUV.y;
+  vec3 bg = texture2D(uTex, clamp(bgUV, 0.001, 0.999)).rgb;
+  bg *= mix(vec3(1.0), vec3(1.07, 1.0, 0.92), uAmb * 0.6);
+  vec3 col = bg * 0.9;
+
+  // ---- the galaxy ----
+  float tilt = -0.35;
+  float incl = 0.60;                       // inclination squash: fairly face-on
+  vec2 pr = rot(p, tilt);
+  vec2 q = vec2(pr.x, pr.y / incl);
+  float rq = length(q) / gr;               // plane radius, 0..1 = disk edge
+  float ang = atan(q.y, q.x);
+
+  if (rq < 1.25) {
+    // differential rotation: inner material laps the outer
+    float rotA = uRot / (0.22 + rq * 1.6);
+    // spiral arms in the rotating frame (logarithmic twist)
+    float s = ang + rotA - 4.2 * log(max(rq, 0.03));
+    float arms = pow(0.5 + 0.5 * cos(2.0 * s), 3.0);
+    // clumps that orbit with the galaxy (cartesian noise, seamless)
+    vec2 rp = rot(vec2(q.x, q.y) / gr, rotA) * 5.0;
+    float clumps = fbm(rp + vec2(rq * 3.0, -rq * 2.0));
+    float clumps2 = fbm(rp * 2.3 - vec2(rq * 4.0, 0.0));
+    // dust lanes hug the inner edge of each arm
+    float dust = pow(0.5 + 0.5 * cos(2.0 * (s + 0.6)), 4.0) * (1.0 - rq) * 0.55;
+    // radial falloff of the disk
+    float diskProfile = smoothstep(1.05, 0.5, rq) * smoothstep(0.0, 0.10, rq);
+    float density = arms * (0.30 + 1.05 * clumps + 0.45 * clumps2) * diskProfile;
+    density = max(0.0, density - dust * diskProfile);
+    // shimmering star sparkle streaming through the arms
+    float sparkle = 0.72 + 0.55 * vnoise(rp * 7.0 + vec2(uTime * 0.9, -uTime * 0.6));
+    // colors: blue-white arms, warm core, pink star-forming knots
+    vec3 armCol = mix(vec3(0.72, 0.83, 1.30), vec3(0.95, 0.98, 1.15), clumps2);
+    float knot = smoothstep(0.68, 0.95, fbm(rp * 1.4 + 31.0)) * arms * diskProfile;
+    vec3 gal = armCol * density * sparkle;
+    gal += vec3(1.25, 0.45, 0.62) * knot * 0.9;
+    gal *= (1.05 + uFlare * 0.9 + uLoad * 0.35);
+    float glint = vnoise(rot(vec2(q.x, q.y) / gr, rotA * 1.35) * 26.0 + vec2(uTime * 0.5, -uTime * 0.35));
+    gal += armCol * density * smoothstep(0.74, 1.0, glint) * 0.85;
+    // the bright heart: galactic bulge + core
+    float bulge = exp(-rq * 5.0);
+    float core = exp(-rq * 20.0);
+    vec3 heart = vec3(1.22, 1.05, 0.80) * bulge * (0.85 + 0.25 * sin(uTime * 0.8) * 0.3 + uFlare * 1.1);
+    heart += vec3(1.3, 1.18, 1.0) * core * (1.6 + uFlare * 2.2);
+    col += gal * 1.35 + heart;
+    // wide soft halo of the galaxy's light
+    col += vec3(0.55, 0.62, 0.85) * exp(-rq * 3.2) * (0.10 + uFlare * 0.10);
+  }
+
+  // ---- the black-hole charging gauge ----
+  {
+    vec2 pb = fc - uBHC;
+    float rb = length(pb);
+    float rsb = uBHRS;
+    if (rb < rsb * 5.4) {
+      float act = uBHChg;
+      float heat = 0.30 + 0.55 * uBHLevel + act * (0.35 + 0.15 * sin(uTime * 2.4));
+      float tiltB = -0.16, sqB = 0.36;
+      vec2 prb = rot(pb, tiltB);
+      vec2 qb = vec2(prb.x, prb.y / sqB);
+      float rqb = length(qb) / rsb;
+      float angb = atan(qb.y, qb.x);
+      if (rb < rsb * 4.4) {
+        float rD = clamp(2.35 * rsb - rb * 0.42, rsb * 1.5, rsb * 4.4) / rsb;
+        float aH = atan(-pb.y, pb.x);
+        float brk = 0.55 + 0.85 * fbm(pb * (1.4 / rsb) + vec2(uTime * 0.02, -uTime * 0.013));
+        col += bhDisk(rD, aH, heat, act) * smoothstep(rsb * 4.4, rsb * 1.15, rb) * smoothstep(rsb * 0.86, rsb * 1.12, rb) * 0.85 * brk;
+      }
+      if (prb.y < 0.0 && rqb > 1.5 && rqb < 4.8) col += bhDisk(rqb, angb, heat, act) * (0.8 + 0.4 * fbm(pb * (1.1 / rsb)));
+      if (rb < rsb) col = vec3(0.0);
+      float ring = exp(-pow((rb - rsb * 1.07) / (rsb * 0.085), 2.0));
+      float gaugeA = fract((atan(pb.y, pb.x) + 1.5708) / 6.2831);
+      float lit = step(gaugeA, uBHLevel);
+      vec3 ringCol = mix(vec3(0.45, 0.5, 0.65), vec3(1.2, 1.1, 0.95), lit);
+      col += ringCol * ring * (0.35 + 0.75 * lit + act * 0.5);
+      if (prb.y >= 0.0 && rqb > 1.5 && rqb < 4.8) col += bhDisk(rqb, angb, heat, act) * (0.88 + 0.24 * fbm(pb * (1.1 / rsb) + 7.0));
+      if (act > 0.01 && rb > rsb * 1.2 && rb < rsb * 5.2) {
+        float sa = atan(pb.y, pb.x);
+        float spiral = vnoise(vec2(sa * 4.0 + rb * 0.05 - uTime * 2.2, rb * 0.11 - uTime * 1.4));
+        col += vec3(0.9, 0.95, 1.2) * smoothstep(0.78, 1.0, spiral) * act * 0.8 * smoothstep(rsb * 5.2, rsb * 1.6, rb);
+      }
+    }
+  }
+
+  // ---- tonemap + vignette ----
+  col = vec3(1.0) - exp(-col * 1.25);
+  vec2 vc = (fc - uRes * 0.5) / uRes;
+  col *= 1.0 - 0.32 * dot(vc, vc);
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<script>
+(() => {
+  const S = { flare: 0, load: 0, huePulse: 0, quake: 0 };
+  const glCanvas = document.getElementById('gl');
+  const fxCanvas = document.getElementById('fx');
+  const fx = fxCanvas.getContext('2d');
+  let W = 0, H = 0, DPR = 1;
+
+  function holePos() { return { x: W * 0.5, y: H * 0.36 }; }
+  function holeR() { return Math.min(W, H) * 0.44; }
+
+  // ---------- time-of-day ambience ----------
+  const KEYS = [
+    [0, 0.00], [5, 0.00], [7, 0.55], [12, 0.25], [17, 0.35], [19, 0.55], [21, 0.08], [24, 0.00]
+  ];
+  function ambience() {
+    const d = new Date(), h = d.getHours() + d.getMinutes() / 60;
+    let a = KEYS[0], b = KEYS[KEYS.length - 1];
+    for (let i = 0; i < KEYS.length - 1; i++) if (h >= KEYS[i][0] && h <= KEYS[i + 1][0]) { a = KEYS[i]; b = KEYS[i + 1]; break; }
+    return a[1] + (b[1] - a[1]) * ((h - a[0]) / Math.max(0.0001, b[0] - a[0]));
+  }
+
+  // ---------- WebGL scene ----------
+  let gl = null, prog = null, uLoc = {}, texReady = false, texW = 1152, texH = 2048;
+  let plateUpload = null;
+  function initGL() {
+    gl = glCanvas.getContext('webgl', { antialias: false, alpha: false });
+    if (!gl) return false;
+    const vsSrc = document.getElementById('vs').textContent;
+    const fsSrc = document.getElementById('fs').textContent;
+    function sh(type, src) {
+      const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.warn(gl.getShaderInfoLog(s)); return null; }
+      return s;
+    }
+    const vs = sh(gl.VERTEX_SHADER, vsSrc), fs = sh(gl.FRAGMENT_SHADER, fsSrc);
+    if (!vs || !fs) return false;
+    prog = gl.createProgram();
+    gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return false;
+    gl.useProgram(prog);
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const aPos = gl.getAttribLocation(prog, 'aPos');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+    for (const n of ['uTex', 'uRes', 'uTexRes', 'uCenter', 'uGR', 'uTime', 'uRot', 'uFlare', 'uLoad', 'uAmb', 'uPar', 'uBHC', 'uBHRS', 'uBHLevel', 'uBHChg']) uLoc[n] = gl.getUniformLocation(prog, n);
+
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    // placeholder 1x1 dark pixel until the plate arrives
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([5, 5, 14, 255]));
+    texReady = true;
+
+    function uploadPlate(img) {
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      texW = img.naturalWidth || img.width; texH = img.naturalHeight || img.height;
+    }
+    plateUpload = uploadPlate;
+    return true;
+  }
+  const glOK = initGL();
+
+  // ---------- skies ----------
+  const SKIES = {
+    'Nebula': 'nebula-plate.jpg',
+    'Veil': 'plate-veil.jpg',
+    'Ember': 'plate-ember.jpg',
+    'Ultraviolet': 'plate-ultraviolet.jpg',
+    'Mono': 'plate-mono.jpg'
+  };
+  function fallbackPlate() {
+    if (!plateUpload) return;
+    const c = document.createElement('canvas'); c.width = 576; c.height = 1024;
+    const g = c.getContext('2d');
+    g.fillStyle = '#04040c'; g.fillRect(0, 0, 576, 1024);
+    const blobs = [['rgba(40,90,110,0.5)', 140, 760, 320], ['rgba(80,50,130,0.45)', 300, 860, 340], ['rgba(120,70,40,0.35)', 470, 800, 260]];
+    for (const [col, x, y, r] of blobs) {
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+    for (let i = 0; i < 2600; i++) {
+      g.fillStyle = `rgba(255,255,255,${0.25 + Math.random() * 0.75})`;
+      g.fillRect(Math.random() * 576, Math.random() * 1024, 1.2, 1.2);
+    }
+    plateUpload(c);
+  }
+  function loadSky(name) {
+    const src = SKIES[name] || SKIES['Nebula'];
+    const img = new Image();
+    img.onload = () => { if (plateUpload) plateUpload(img); };
+    img.onerror = () => fallbackPlate();
+    img.src = src;
+  }
+  let savedSky = 'Nebula';
+  try { savedSky = localStorage.getItem('eh-sky') || 'Nebula'; } catch (e) {}
+  if (!SKIES[savedSky]) savedSky = 'Nebula';
+  loadSky(savedSky);
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    for (const c of [glCanvas, fxCanvas]) {
+      c.width = W * DPR; c.height = H * DPR;
+      c.style.width = W + 'px'; c.style.height = H + 'px';
+    }
+    fx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    if (gl) gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+    buildTwinkles();
+  }
+
+  // ---------- overlay: twinkling star layer ----------
+  let twinkles = [];
+  function buildTwinkles() {
+    twinkles = [];
+    for (let i = 0; i < 80; i++) twinkles.push({
+      x: Math.random() * W, y: Math.random() * H,
+      r: 0.6 + Math.random() * 1.3, ph: Math.random() * Math.PI * 2, sp: 0.4 + Math.random() * 1.3,
+      warm: Math.random() < 0.2
+    });
+  }
+
+  // ---------- transient objects ----------
+  const fed = [], comets = [], meteors = [], novas = [];
+  function feedStar(x, y) { fed.push({ x, y, vx: 0, vy: 0, life: 1 }); }
+  function spawnMeteor() {
+    const sx = Math.random() * W * 0.8 + W * 0.1, sy = Math.random() * H * 0.25;
+    const ang = Math.PI * (0.72 + Math.random() * 0.12), sp = 520 + Math.random() * 260;
+    meteors.push({ x: sx, y: sy, vx: Math.cos(ang) * sp, vy: -Math.sin(ang) * sp * 0.45, life: 1 });
+  }
+
+  // ---------- EFFECTS ----------
+  const EFFECTS = {
+    meteor:      { label: 'Meteor',            run() { spawnMeteor(); } },
+    shower:      { label: 'Meteor shower',     run() { let n = 5 + (Math.random() * 4 | 0); const iv = setInterval(() => { spawnMeteor(); if (--n <= 0) clearInterval(iv); }, 260); } },
+    feed:        { label: 'Feed a star',       run() { feedStar(W * (0.15 + Math.random() * 0.7), H * (0.08 + Math.random() * 0.2)); } },
+    flare:       { label: 'Core flare',        run() { S.flare = 1; } },
+    supernova:   { label: 'Supernova',         run() { const hp = holePos(); novas.push({ x: hp.x, y: hp.y, r: holeR() * 0.15, life: 1 }); S.flare = 1; } },
+    cometburst:  { label: 'Comet burst',       run() { for (let i = 0; i < 14; i++) { const a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 130; comets.push({ x: W * (0.3 + Math.random() * 0.4), y: H * (0.25 + Math.random() * 0.3), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1 }); } } },
+    starbirth:   { label: 'Star birth',        run() { twinkles.push({ x: Math.random() * W, y: Math.random() * H * 0.85, r: 2.0, ph: 0, sp: 1.6, warm: Math.random() < 0.3 }); } },
+    pulse:       { label: 'Palette pulse',     run() { S.huePulse = 1; } },
+    quake:       { label: 'Sky quake',         run() { S.quake = 1; } },
+    loadspike:   { label: 'Load surge (galaxy spins up)', run() { S.load = 1; } }
+  };
+
+  // ---------- EVENTS ----------
+  const EVENTS = {
+    message:   'Message received',
+    email:     'Email received',
+    call:      'Incoming call',
+    download:  'Download finished',
+    install:   'App installed',
+    charging:  'Charging started',
+    battfull:  'Battery full',
+    battlow:   'Battery low',
+    connlost:  'Connection lost',
+    connback:  'Connection restored',
+    unlock:    'Screen unlocked',
+    hour:      'Top of the hour',
+    load:      'Phone working hard'
+  };
+
+  // ---------- RULES ----------
+  const DEFAULT_RULES = [
+    { ev: 'message',  fx: 'feed' },
+    { ev: 'email',    fx: 'meteor' },
+    { ev: 'call',     fx: 'cometburst' },
+    { ev: 'download', fx: 'meteor' },
+    { ev: 'charging', fx: 'flare' },
+    { ev: 'unlock',   fx: 'meteor' },
+    { ev: 'load',     fx: 'loadspike' }
+  ];
+  let rules;
+  try { rules = JSON.parse(localStorage.getItem('eh-rules') || 'null') || DEFAULT_RULES.slice(); }
+  catch (e) { rules = DEFAULT_RULES.slice(); }
+  function saveRules() { try { localStorage.setItem('eh-rules', JSON.stringify(rules)); } catch (e) {} }
+
+  const toastEl = document.getElementById('toast');
+  let toastTimer = null;
+  function toast(msg) {
+    toastEl.textContent = msg; toastEl.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400);
+  }
+  let bhLevel = 0.62, bhCharging = false, bhAct = 0;
+  function fireEvent(evKey) {
+    if (!batt) {
+      if (evKey === 'charging') bhCharging = true;
+      if (evKey === 'battfull') { bhLevel = 1; bhCharging = false; }
+      if (evKey === 'battlow') { bhLevel = 0.15; bhCharging = false; }
+    }
+    const matched = rules.filter(r => r.ev === evKey);
+    if (matched.length === 0) { toast(EVENTS[evKey] + ' · no trigger set'); return; }
+    for (const r of matched) { if (EFFECTS[r.fx]) EFFECTS[r.fx].run(); }
+    toast(EVENTS[evKey] + ' → ' + matched.map(r => EFFECTS[r.fx].label).join(' + '));
+  }
+
+  // ---------- panel UI ----------
+  const panel = document.getElementById('panel');
+  document.getElementById('evBtn').addEventListener('click', () => panel.classList.add('open'));
+  document.getElementById('closePanel').addEventListener('click', () => panel.classList.remove('open'));
+  const skyChips = document.getElementById('skyChips');
+  for (const name of Object.keys(SKIES)) {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = name;
+    b.addEventListener('click', () => {
+      loadSky(name);
+      try { localStorage.setItem('eh-sky', name); } catch (e) {}
+      toast('Sky: ' + name);
+    });
+    skyChips.appendChild(b);
+  }
+  const simChips = document.getElementById('simChips');
+  for (const key of Object.keys(EVENTS)) {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = EVENTS[key];
+    b.addEventListener('click', () => fireEvent(key));
+    simChips.appendChild(b);
+  }
+  const srcSel = document.getElementById('evSource'), fxSel = document.getElementById('evEffect');
+  for (const key of Object.keys(EVENTS)) { const o = document.createElement('option'); o.value = key; o.textContent = EVENTS[key]; srcSel.appendChild(o); }
+  for (const key of Object.keys(EFFECTS)) { const o = document.createElement('option'); o.value = key; o.textContent = EFFECTS[key].label; fxSel.appendChild(o); }
+  const ruleList = document.getElementById('ruleList');
+  function renderRules() {
+    ruleList.innerHTML = '';
+    if (rules.length === 0) { ruleList.innerHTML = '<div class="note">No triggers yet. Add one below.</div>'; return; }
+    rules.forEach((r, i) => {
+      const row = document.createElement('div'); row.className = 'ruleRow';
+      const txt = document.createElement('div'); txt.className = 'txt';
+      txt.textContent = 'When: ' + (EVENTS[r.ev] || r.ev) + '  →  ' + (EFFECTS[r.fx] ? EFFECTS[r.fx].label : r.fx);
+      const del = document.createElement('button'); del.className = 'del'; del.textContent = 'Remove';
+      del.addEventListener('click', () => { rules.splice(i, 1); saveRules(); renderRules(); });
+      row.appendChild(txt); row.appendChild(del); ruleList.appendChild(row);
+    });
+  }
+  renderRules();
+  document.getElementById('addRule').addEventListener('click', () => {
+    rules.push({ ev: srcSel.value, fx: fxSel.value });
+    saveRules(); renderRules();
+    toast('Trigger added: ' + EVENTS[srcSel.value] + ' → ' + EFFECTS[fxSel.value].label);
+  });
+
+  // ---------- real signals ----------
+  let batt = null, lowFired = false;
+  if (navigator.getBattery) navigator.getBattery().then(b => {
+    batt = b;
+    b.addEventListener('chargingchange', () => { if (b.charging) fireEvent('charging'); });
+    b.addEventListener('levelchange', () => {
+      if (b.level >= 0.99 && b.charging) fireEvent('battfull');
+      if (b.level <= 0.2 && !b.charging && !lowFired) { lowFired = true; fireEvent('battlow'); }
+      if (b.level > 0.25) lowFired = false;
+    });
+  }).catch(() => {});
+  window.addEventListener('offline', () => fireEvent('connlost'));
+  window.addEventListener('online', () => fireEvent('connback'));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) fireEvent('unlock'); });
+  let lastMinute = new Date().getMinutes();
+  setInterval(() => {
+    const m = new Date().getMinutes();
+    if (m !== lastMinute) { lastMinute = m; if (m === 0) fireEvent('hour'); }
+  }, 1000);
+
+  // ---------- touch input ----------
+  let parX = 0, parY = 0, tParX = 0, tParY = 0;
+  let dragging = false, lastPX = 0, lastPY = 0, downT = 0, moved = 0;
+  fxCanvas.addEventListener('pointerdown', e => { dragging = true; moved = 0; downT = performance.now(); lastPX = e.clientX; lastPY = e.clientY; });
+  fxCanvas.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - lastPX, dy = e.clientY - lastPY;
+    moved += Math.abs(dx) + Math.abs(dy);
+    comets.push({ x: e.clientX, y: e.clientY, vx: dx * 6, vy: dy * 6, life: 1 });
+    if (comets.length > 90) comets.shift();
+    tParX = (e.clientX / W - 0.5) * 2; tParY = (e.clientY / H - 0.5) * 2;
+    lastPX = e.clientX; lastPY = e.clientY;
+  });
+  function endPointer() {
+    if (dragging && performance.now() - downT < 260 && moved < 14) feedStar(lastPX, lastPY);
+    dragging = false;
+  }
+  fxCanvas.addEventListener('pointerup', endPointer);
+  fxCanvas.addEventListener('pointercancel', endPointer);
+  if (window.DeviceOrientationEvent) {
+    window.addEventListener('deviceorientation', e => {
+      if (dragging || e.gamma === null) return;
+      tParX = Math.max(-1, Math.min(1, e.gamma / 22));
+      tParY = Math.max(-1, Math.min(1, (e.beta - 42) / 22));
+    });
+  }
+
+  // ---------- render ----------
+  const stage = document.getElementById('stage');
+  const loadBar = document.getElementById('loadBar');
+  let last = performance.now(), tSec = 0, loadShown = -1, rotA = 0;
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    tSec += dt;
+    rotA += dt * (0.30 + S.load * 0.75 + S.flare * 0.15);
+    S.flare = Math.max(0, S.flare - dt * 0.7);
+    S.load = Math.max(0, S.load - dt * 0.12);
+    S.huePulse = Math.max(0, S.huePulse - dt * 0.45);
+    S.quake = Math.max(0, S.quake - dt * 1.6);
+    parX += (tParX - parX) * 0.045; parY += (tParY - parY) * 0.045;
+    const hp = holePos(), hr = holeR();
+
+    // GL scene
+    if (gl && glOK && texReady) {
+      gl.useProgram(prog);
+      gl.uniform1i(uLoc.uTex, 0);
+      gl.uniform2f(uLoc.uRes, glCanvas.width, glCanvas.height);
+      gl.uniform2f(uLoc.uTexRes, texW, texH);
+      gl.uniform2f(uLoc.uCenter, hp.x * DPR, hp.y * DPR);
+      gl.uniform1f(uLoc.uGR, hr * DPR);
+      gl.uniform1f(uLoc.uRot, rotA);
+      gl.uniform1f(uLoc.uTime, tSec);
+      gl.uniform1f(uLoc.uFlare, S.flare);
+      gl.uniform1f(uLoc.uLoad, S.load);
+      gl.uniform1f(uLoc.uAmb, ambience());
+      gl.uniform2f(uLoc.uPar, -parX * 9 * DPR, -parY * 9 * DPR);
+      if (batt) { bhLevel = batt.level; bhCharging = batt.charging; }
+      else if (bhCharging) { bhLevel = Math.min(1, bhLevel + dt * 0.01); if (bhLevel >= 1) bhCharging = false; }
+      bhAct += ((bhCharging ? 1 : 0) - bhAct) * Math.min(1, dt * 3);
+      const bhMin = Math.min(W, H);
+      gl.uniform2f(uLoc.uBHC, (W - bhMin * 0.185) * DPR, (H - bhMin * 0.34) * DPR);
+      gl.uniform1f(uLoc.uBHRS, bhMin * 0.034 * DPR);
+      gl.uniform1f(uLoc.uBHLevel, bhLevel);
+      gl.uniform1f(uLoc.uBHChg, bhAct);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
+    // quake on the whole stage
+    const qx = S.quake > 0 ? (Math.random() - 0.5) * 9 * S.quake : 0;
+    const qy = S.quake > 0 ? (Math.random() - 0.5) * 9 * S.quake : 0;
+    stage.style.transform = `translate(${qx}px, ${qy}px)`;
+
+    // overlay
+    fx.clearRect(0, 0, W, H);
+
+    if (S.huePulse > 0) {
+      const g = fx.createRadialGradient(hp.x, hp.y, hr, hp.x, hp.y, Math.max(W, H) * 0.7);
+      g.addColorStop(0, `hsla(${255 - S.huePulse * 120},90%,60%,${0.16 * S.huePulse})`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      fx.fillStyle = g; fx.fillRect(0, 0, W, H);
+    }
+
+    for (const s of twinkles) {
+      const tw = 0.5 + 0.5 * Math.sin(now * 0.001 * s.sp + s.ph);
+      fx.globalAlpha = tw * 0.75;
+      fx.fillStyle = s.warm ? '#ffe3c2' : '#dfe8ff';
+      fx.beginPath(); fx.arc(s.x - parX * 5, s.y - parY * 5, s.r, 0, 7); fx.fill();
+    }
+    fx.globalAlpha = 1;
+
+    for (let i = meteors.length - 1; i >= 0; i--) {
+      const m = meteors[i];
+      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt * 0.55;
+      if (m.life <= 0) { meteors.splice(i, 1); continue; }
+      const tail = 0.14;
+      const g = fx.createLinearGradient(m.x, m.y, m.x - m.vx * tail, m.y - m.vy * tail);
+      g.addColorStop(0, `rgba(255,255,255,${0.85 * m.life})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+      fx.strokeStyle = g; fx.lineWidth = 1.6;
+      fx.beginPath(); fx.moveTo(m.x, m.y); fx.lineTo(m.x - m.vx * tail, m.y - m.vy * tail); fx.stroke();
+    }
+
+    for (let i = comets.length - 1; i >= 0; i--) {
+      const c = comets[i];
+      c.x += c.vx * dt; c.y += c.vy * dt; c.vx *= 0.94; c.vy *= 0.94; c.life -= dt * 1.5;
+      if (c.life <= 0) { comets.splice(i, 1); continue; }
+      const g = fx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 9);
+      g.addColorStop(0, `rgba(210,235,255,${0.8 * c.life})`); g.addColorStop(1, 'rgba(120,160,255,0)');
+      fx.fillStyle = g; fx.beginPath(); fx.arc(c.x, c.y, 9, 0, 7); fx.fill();
+    }
+
+    for (let i = novas.length - 1; i >= 0; i--) {
+      const n = novas[i];
+      n.r += dt * 340; n.life -= dt * 0.85;
+      if (n.life <= 0) { novas.splice(i, 1); continue; }
+      fx.strokeStyle = `hsla(45,100%,80%,${0.75 * n.life})`;
+      fx.lineWidth = 2.4;
+      fx.beginPath(); fx.arc(n.x, n.y, n.r, 0, 7); fx.stroke();
+      fx.strokeStyle = `hsla(28,100%,62%,${0.4 * n.life})`;
+      fx.beginPath(); fx.arc(n.x, n.y, n.r * 0.82, 0, 7); fx.stroke();
+    }
+
+    for (let i = fed.length - 1; i >= 0; i--) {
+      const s = fed[i];
+      const dx = hp.x - s.x, dy = hp.y - s.y, dist = Math.max(18, Math.hypot(dx, dy));
+      const pull = 90000 / (dist * dist);
+      s.vx += (dx / dist) * pull * dt * 60 * 0.16;
+      s.vy += (dy / dist) * pull * dt * 60 * 0.16;
+      s.vx += (-dy / dist) * pull * dt * 22;
+      s.vy += (dx / dist) * pull * dt * 22;
+      s.vx *= 0.995; s.vy *= 0.995;
+      s.x += s.vx * dt * 3.2; s.y += s.vy * dt * 3.2;
+      const stretch = Math.min(26, Math.hypot(s.vx, s.vy) * 0.09);
+      fx.save(); fx.translate(s.x, s.y); fx.rotate(Math.atan2(s.vy, s.vx));
+      const g = fx.createRadialGradient(0, 0, 0, 0, 0, 8);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(150,180,255,0)');
+      fx.fillStyle = g; fx.beginPath(); fx.ellipse(0, 0, 5 + stretch, 3.2, 0, 0, 7); fx.fill();
+      fx.restore();
+      if (dist < hr * 0.14) { fed.splice(i, 1); S.flare = 1; }
+      else if (dist > Math.max(W, H) * 1.4) fed.splice(i, 1);
+    }
+
+    const lp = Math.round(S.load * 100);
+    if (lp !== loadShown) { loadShown = lp; loadBar.style.width = lp + '%'; }
+    requestAnimationFrame(frame);
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(frame);
+  setTimeout(() => { document.getElementById('fade').style.opacity = '0'; }, 60);
+  setTimeout(spawnMeteor, 1400);
+  setTimeout(() => feedStar(W * 0.82, H * 0.16), 2100);
+})();
+</script>
+</body>
+</html>
