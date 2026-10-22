@@ -471,8 +471,8 @@ void main() {
     { ev: 'charging', fx: 'solarflare' },
     { ev: 'battfull', fx: 'supernova' },
     { ev: 'battlow',  fx: 'pulse' },
-    { ev: 'netlost',  fx: 'quake' },
-    { ev: 'neton',    fx: 'satellite' },
+    { ev: 'connlost', fx: 'quake' },
+    { ev: 'connback', fx: 'satellite' },
     { ev: 'unlock',   fx: 'meteor' },
     { ev: 'unlock',   fx: 'aurora' },
     { ev: 'hour',     fx: 'eclipse' },
@@ -480,10 +480,10 @@ void main() {
   ];
   let rules;
   try {
-    if (localStorage.getItem('eh-rules-v') !== '2') {
+    if (localStorage.getItem('eh-rules-v') !== '3') {
       rules = DEFAULT_RULES.slice();
       localStorage.setItem('eh-rules', JSON.stringify(rules));
-      localStorage.setItem('eh-rules-v', '2');
+      localStorage.setItem('eh-rules-v', '3');
     } else {
       rules = JSON.parse(localStorage.getItem('eh-rules') || 'null') || DEFAULT_RULES.slice();
     }
