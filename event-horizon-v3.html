@@ -80,6 +80,8 @@
 <button id="evBtn">⚡ EVENTS</button>
 <div id="panel">
   <button id="closePanel">✕</button>
+  <h3>Sky</h3>
+  <div class="chips" id="skyChips"></div>
   <h3>Simulate a phone event</h3>
   <div class="chips" id="simChips"></div>
   <h3>My triggers</h3>
@@ -245,6 +247,7 @@ void main() {
 
   // ---------- WebGL scene ----------
   let gl = null, prog = null, uLoc = {}, texReady = false, texW = 1152, texH = 2048;
+  let plateUpload = null;
   function initGL() {
     gl = glCanvas.getContext('webgl', { antialias: false, alpha: false });
     if (!gl) return false;
@@ -284,29 +287,47 @@ void main() {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
       texW = img.naturalWidth || img.width; texH = img.naturalHeight || img.height;
     }
-    const plate = new Image();
-    plate.onload = () => uploadPlate(plate);
-    plate.onerror = () => {
-      // fallback: procedural dark nebula canvas so the shader still runs standalone
-      const c = document.createElement('canvas'); c.width = 576; c.height = 1024;
-      const g = c.getContext('2d');
-      g.fillStyle = '#04040c'; g.fillRect(0, 0, 576, 1024);
-      const blobs = [['rgba(40,90,110,0.5)', 140, 760, 320], ['rgba(80,50,130,0.45)', 300, 860, 340], ['rgba(120,70,40,0.35)', 470, 800, 260]];
-      for (const [col, x, y, r] of blobs) {
-        const gr = g.createRadialGradient(x, y, 0, x, y, r);
-        gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)');
-        g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
-      }
-      for (let i = 0; i < 2600; i++) {
-        g.fillStyle = `rgba(255,255,255,${0.25 + Math.random() * 0.75})`;
-        g.fillRect(Math.random() * 576, Math.random() * 1024, 1.2, 1.2);
-      }
-      uploadPlate(c);
-    };
-    plate.src = 'nebula-plate.jpg';
+    plateUpload = uploadPlate;
     return true;
   }
   const glOK = initGL();
+
+  // ---------- skies ----------
+  const SKIES = {
+    'Nebula': 'nebula-plate.jpg',
+    'Veil': 'plate-veil.jpg',
+    'Ember': 'plate-ember.jpg',
+    'Ultraviolet': 'plate-ultraviolet.jpg',
+    'Mono': 'plate-mono.jpg'
+  };
+  function fallbackPlate() {
+    if (!plateUpload) return;
+    const c = document.createElement('canvas'); c.width = 576; c.height = 1024;
+    const g = c.getContext('2d');
+    g.fillStyle = '#04040c'; g.fillRect(0, 0, 576, 1024);
+    const blobs = [['rgba(40,90,110,0.5)', 140, 760, 320], ['rgba(80,50,130,0.45)', 300, 860, 340], ['rgba(120,70,40,0.35)', 470, 800, 260]];
+    for (const [col, x, y, r] of blobs) {
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+    for (let i = 0; i < 2600; i++) {
+      g.fillStyle = `rgba(255,255,255,${0.25 + Math.random() * 0.75})`;
+      g.fillRect(Math.random() * 576, Math.random() * 1024, 1.2, 1.2);
+    }
+    plateUpload(c);
+  }
+  function loadSky(name) {
+    const src = SKIES[name] || SKIES['Nebula'];
+    const img = new Image();
+    img.onload = () => { if (plateUpload) plateUpload(img); };
+    img.onerror = () => fallbackPlate();
+    img.src = src;
+  }
+  let savedSky = 'Nebula';
+  try { savedSky = localStorage.getItem('eh-sky') || 'Nebula'; } catch (e) {}
+  if (!SKIES[savedSky]) savedSky = 'Nebula';
+  loadSky(savedSky);
 
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -403,6 +424,17 @@ void main() {
   const panel = document.getElementById('panel');
   document.getElementById('evBtn').addEventListener('click', () => panel.classList.add('open'));
   document.getElementById('closePanel').addEventListener('click', () => panel.classList.remove('open'));
+  const skyChips = document.getElementById('skyChips');
+  for (const name of Object.keys(SKIES)) {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = name;
+    b.addEventListener('click', () => {
+      loadSky(name);
+      try { localStorage.setItem('eh-sky', name); } catch (e) {}
+      toast('Sky: ' + name);
+    });
+    skyChips.appendChild(b);
+  }
   const simChips = document.getElementById('simChips');
   for (const key of Object.keys(EVENTS)) {
     const b = document.createElement('button');
