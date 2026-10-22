@@ -181,12 +181,14 @@ void main() {
   bg *= mix(vec3(1.0), vec3(1.07, 1.0, 0.92), uAmb * 0.6);
   vec3 col = bg * 0.9;
   {
-    vec2 c1 = uCenter + vec2(uGR * 1.02, -uGR * 0.62);
-    float d1 = length((fc + uPar * 0.6 - c1) / vec2(1.0, 0.78));
-    col += vec3(1.10, 1.00, 0.85) * exp(-d1 / (uGR * 0.055)) * 0.50;
-    vec2 c2 = uCenter + vec2(-uGR * 0.98, uGR * 0.62);
-    vec2 o2 = rot(fc + uPar * 0.6 - c2, 0.6) / vec2(1.0, 0.55);
-    col += vec3(0.95, 0.92, 0.80) * exp(-length(o2) / (uGR * 0.085)) * 0.26;
+    vec2 ax = vec2(0.939, -0.342), pp = vec2(0.342, 0.939);
+    vec2 c1 = uCenter + (ax * 0.45 - pp * 0.92) * uGR;
+    float d1 = length((fc + uPar * 0.6 - c1) / vec2(1.0, 0.72));
+    col += vec3(1.12, 1.02, 0.86) * (exp(-d1 / (uGR * 0.030)) * 0.85 + exp(-d1 / (uGR * 0.105)) * 0.38);
+    vec2 c2 = uCenter + (pp * 1.00 - ax * 0.35) * uGR;
+    vec2 o2 = rot(fc + uPar * 0.6 - c2, 0.6) / vec2(1.0, 0.52);
+    float d2 = length(o2);
+    col += vec3(0.96, 0.93, 0.82) * (exp(-d2 / (uGR * 0.045)) * 0.55 + exp(-d2 / (uGR * 0.14)) * 0.30);
   }
 
   // ---- the galaxy ----
@@ -209,7 +211,10 @@ void main() {
     float clumps2 = fbm(rp * 2.3 - vec2(rq * 4.0, 0.0));
     // dust lanes hug the inner edge of each arm
     float dust = pow(0.5 + 0.5 * cos(2.0 * (s + 0.6)), 4.0) * (1.0 - rq) * 0.85;
-    float lane = exp(-pow((rq - 0.52) * 9.0, 2.0)) + 0.7 * exp(-pow((rq - 0.74) * 11.0, 2.0));
+    float laneWob = vnoise(vec2(cos(ang), sin(ang)) * 3.0 + 7.0);
+    float laneBreak = 0.45 + 0.85 * vnoise(vec2(cos(ang) * 2.0 + 5.0, sin(ang) * 2.0) + rq * 6.0);
+    float rl = rq + 0.04 * (laneWob - 0.5);
+    float lane = (exp(-pow((rl - 0.52) * 9.0, 2.0)) + 0.7 * exp(-pow((rl - 0.74) * 11.0, 2.0))) * laneBreak;
     float front = smoothstep(-0.15, 0.6, pr.y / gr);
     dust += lane * (0.35 + 0.45 * arms) * (0.7 + 0.55 * front);
     // radial falloff of the disk
@@ -241,7 +246,7 @@ void main() {
       sp = rot(sp, tilt);
       float d = length(pr - sp * gr);
       float tw2 = 0.7 + 0.6 * sin(uTime * (2.0 + seed * 3.0) + fi);
-      col += vec3(1.15, 1.1, 1.05) * exp(-d * d / (gr * gr * 0.0011)) * (0.5 + seed * 0.7) * tw2;
+      col += vec3(1.15, 1.1, 1.05) * exp(-d * d / (gr * gr * 0.0006)) * (0.55 + seed * 0.75) * tw2;
     }
     // the bright heart: galactic bulge + core
     float bulge = exp(-rq * 3.1);
@@ -249,7 +254,7 @@ void main() {
     float core = exp(-rq * 20.0);
     vec3 heart = vec3(1.24, 1.04, 0.74) * bulge * (0.95 + 0.25 * sin(uTime * 0.8) * 0.3 + uFlare * 1.1);
     heart += vec3(1.20, 1.00, 0.70) * bar * 0.38;
-    heart += vec3(1.3, 1.18, 1.0) * core * (1.6 + uFlare * 2.2);
+    heart += vec3(1.22, 1.08, 0.88) * core * (1.35 + uFlare * 2.2);
     col += gal * 1.35 + heart;
     // wide soft halo of the galaxy's light
     col += vec3(0.55, 0.62, 0.85) * exp(-rq * 3.2) * (0.10 + uFlare * 0.10);
