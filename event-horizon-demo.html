@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Event Horizon — Interactive Wallpaper Demo v3</title>
+<title>Event Horizon — Interactive Wallpaper Demo</title>
 <style>
   html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#030308; }
   #stage { position:fixed; inset:0; will-change:transform; }
@@ -32,8 +32,19 @@
     opacity:0; transition:opacity .35s, transform .35s; pointer-events:none; white-space:nowrap;
   }
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  #dock {
+    position:fixed; left:0; right:0; bottom:calc(env(safe-area-inset-bottom, 0px) + 8px); z-index:6;
+    display:flex; gap:6px; overflow-x:auto; padding:4px 10px; scrollbar-width:none;
+  }
+  #dock::-webkit-scrollbar { display:none; }
+  #dock button {
+    flex:none; font:600 11.5px/1 system-ui, sans-serif; letter-spacing:.03em; color:#e8ebff;
+    background:rgba(14,18,42,.72); border:1px solid rgba(140,160,255,.35); border-radius:999px;
+    padding:9px 12px; backdrop-filter:blur(8px); cursor:pointer; white-space:nowrap;
+  }
+  #dock button:active { background:rgba(70,90,200,.55); }
   #evBtn {
-    position:fixed; right:12px; bottom:calc(env(safe-area-inset-bottom, 0px) + 14px); z-index:6;
+    position:fixed; left:12px; bottom:calc(env(safe-area-inset-bottom, 0px) + 62px); z-index:6;
     font:600 13px/1 system-ui, sans-serif; letter-spacing:.08em; color:#eef1ff;
     background:rgba(16,20,46,.78); border:1px solid rgba(140,160,255,.4); border-radius:999px; padding:11px 16px;
     backdrop-filter: blur(8px); cursor:pointer;
@@ -78,12 +89,12 @@
   <div class="hint">touch the sky to feed the hole &nbsp;·&nbsp; drag for a comet</div>
 </div>
 <button id="evBtn">⚡ EVENTS</button>
+<div id="dock"></div>
 <div id="panel">
   <button id="closePanel">✕</button>
   <h3>Sky</h3>
   <div class="chips" id="skyChips"></div>
-  <h3>Simulate a phone event</h3>
-  <div class="chips" id="simChips"></div>
+  <div class="note" style="margin:2px 0 10px">Trigger events any time from the bar at the bottom of the screen — no need to open this panel.</div>
   <h3>My triggers</h3>
   <div id="ruleList"></div>
   <h3>Add your own trigger</h3>
@@ -106,13 +117,18 @@ precision highp float;
 uniform sampler2D uTex;
 uniform vec2 uRes;
 uniform vec2 uTexRes;
-uniform vec2 uCenter;   // hole center, pixels, y-down screen space
-uniform float uRS;      // shadow radius, pixels
+uniform vec2 uCenter;   // galaxy center, pixels, y-down screen space
+uniform float uGR;      // galaxy outer radius, pixels
 uniform float uTime;
+uniform float uRot;     // accumulated rotation, radians
 uniform float uFlare;
 uniform float uLoad;
 uniform float uAmb;     // dawn/dusk warmth 0..1
 uniform vec2 uPar;      // parallax offset, pixels
+uniform vec2 uBHC;      // black-hole gauge center, pixels
+uniform float uBHRS;    // black-hole shadow radius, pixels
+uniform float uBHLevel; // battery level 0..1
+uniform float uBHChg;   // charging activity 0..1
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
 float vnoise(vec2 p) {
@@ -129,91 +145,135 @@ float fbm(vec2 p) {
 vec2 rot(vec2 v, float a) { float c = cos(a), s = sin(a); return vec2(c * v.x - s * v.y, s * v.x + c * v.y); }
 
 vec3 heatRamp(float t) {
-  vec3 c1 = vec3(1.25, 1.18, 1.05);   // white hot
-  vec3 c2 = vec3(1.15, 0.78, 0.38);   // gold
-  vec3 c3 = vec3(0.85, 0.32, 0.10);   // orange red
-  vec3 c4 = vec3(0.30, 0.06, 0.02);   // deep red ember
+  vec3 c1 = vec3(1.25, 1.18, 1.05);
+  vec3 c2 = vec3(1.15, 0.78, 0.38);
+  vec3 c3 = vec3(0.85, 0.32, 0.10);
+  vec3 c4 = vec3(0.30, 0.06, 0.02);
   vec3 col = mix(c1, c2, smoothstep(0.0, 0.38, t));
   col = mix(col, c3, smoothstep(0.38, 0.72, t));
   col = mix(col, c4, smoothstep(0.72, 1.0, t));
   return col;
 }
-
-// disk color at plane radius rq (in shadow radii) and plane angle ang
-vec3 diskColor(float rq, float ang, float rs) {
+vec3 bhDisk(float rq, float ang, float heat, float act) {
   float inner = 1.5, outer = 4.8;
   float t = clamp((rq - inner) / (outer - inner), 0.0, 1.0);
-  float rotSpd = 2.4 / pow(rq, 1.5);
-  float a2 = ang + uTime * rotSpd * (0.55 + uLoad * 1.1);
+  float a2 = ang + (uTime * (0.8 + act * 2.4)) * 2.4 / pow(rq, 1.5);
   vec2 rp = rot(vec2(cos(ang), sin(ang)) * rq, a2 - ang);
-  float n = fbm(rp * vec2(2.6, 7.5) + vec2(uTime * 0.03, 0.0));
-  float n2 = fbm(rp * vec2(6.5, 16.0) - vec2(uTime * 0.05, 0.0));
-  float turb = 0.45 + 0.85 * n + 0.35 * n2;
-  float beamSide = sin(ang + 0.7);
-  float beam = 1.0 + 0.55 * beamSide;
-  vec3 col = heatRamp(t);
-  col = mix(col, col * vec3(0.82, 0.92, 1.30), clamp(beamSide, 0.0, 1.0) * 0.38); // approaching side runs bluer
-  float bright = turb * beam * (0.85 + uFlare * 1.1 + uLoad * 0.4);
+  float n = fbm(rp * vec2(2.6, 7.5));
+  float turb = 0.45 + 0.85 * n;
+  float beam = 1.0 + 0.55 * sin(ang + 0.7);
+  vec3 c = heatRamp(t);
+  c = mix(c, c * vec3(0.82, 0.92, 1.30), clamp(sin(ang + 0.7), 0.0, 1.0) * 0.38);
   float edge = smoothstep(inner * 0.96, inner * 1.18, rq) * (1.0 - smoothstep(outer * 0.72, outer, rq));
-  return col * bright * edge * 1.6;
+  return c * turb * beam * edge * 1.6 * heat;
 }
 
 void main() {
   vec2 fc = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y); // y-down
   vec2 p = fc - uCenter;
-  float rs = uRS;
-  float r = length(p);
-  vec2 dir = r > 0.001 ? p / r : vec2(0.0);
+  float gr = uGR;
 
-  // ---- gravitational lensing of the background plate ----
-  float bend = (rs * rs) / max(r, rs * 0.7);
-  vec2 samplePt = fc - dir * bend * 0.42 + uPar;
-  float swirl = 0.10 * (rs * rs) / max(r * r, rs * rs);
-  samplePt = uCenter + rot(samplePt - uCenter, swirl * 0.35);
+  // ---- background plate (no lensing now; gentle parallax only) ----
   float coverScale = max(uRes.x / uTexRes.x, uRes.y / uTexRes.y);
-  vec2 bgUV = (samplePt - uRes * 0.5) / (uTexRes * coverScale) + 0.5;
+  vec2 bgUV = (fc + uPar - uRes * 0.5) / (uTexRes * coverScale) + 0.5;
   bgUV.y = 1.0 - bgUV.y;
   vec3 bg = texture2D(uTex, clamp(bgUV, 0.001, 0.999)).rgb;
   bg *= mix(vec3(1.0), vec3(1.07, 1.0, 0.92), uAmb * 0.6);
-  vec3 col = bg * 0.92;
+  vec3 col = bg * 0.9;
 
-  float tilt = -0.16;
-  float squash = 0.40;
+  // ---- the galaxy ----
+  float tilt = -0.35;
+  float incl = 0.60;                       // inclination squash: fairly face-on
   vec2 pr = rot(p, tilt);
-  vec2 q = vec2(pr.x, pr.y / squash);
-  float rq = length(q) / rs;
+  vec2 q = vec2(pr.x, pr.y / incl);
+  float rq = length(q) / gr;               // plane radius, 0..1 = disk edge
   float ang = atan(q.y, q.x);
 
-  // ---- halo: the far side of the disk, lensed over and under the shadow ----
-  if (r < rs * 4.4) {
-    float rD = clamp(2.35 * rs - r * 0.42, rs * 1.5, rs * 4.4) / rs;
-    float aH = atan(-p.y, p.x);
-    vec3 halo = diskColor(rD, aH, rs);
-    float haloFall = smoothstep(rs * 4.4, rs * 1.15, r) * smoothstep(rs * 0.86, rs * 1.12, r);
-    float breakup = 0.55 + 0.85 * fbm(p * (1.4 / rs) + vec2(uTime * 0.02, -uTime * 0.013));
-    col += halo * haloFall * 0.85 * breakup;
+  if (rq < 1.25) {
+    // differential rotation: inner material laps the outer
+    float rotA = uRot / (0.22 + rq * 1.6);
+    // spiral arms in the rotating frame (logarithmic twist)
+    float s = ang + rotA - 4.2 * log(max(rq, 0.03));
+    float arms = pow(0.5 + 0.5 * cos(2.0 * s), 3.0);
+    // clumps that orbit with the galaxy (cartesian noise, seamless)
+    vec2 rp = rot(vec2(q.x, q.y) / gr, rotA) * 5.0;
+    float clumps = fbm(rp + vec2(rq * 3.0, -rq * 2.0));
+    float clumps2 = fbm(rp * 2.3 - vec2(rq * 4.0, 0.0));
+    // dust lanes hug the inner edge of each arm
+    float dust = pow(0.5 + 0.5 * cos(2.0 * (s + 0.6)), 4.0) * (1.0 - rq) * 0.55;
+    // radial falloff of the disk
+    float diskProfile = smoothstep(1.05, 0.5, rq) * smoothstep(0.0, 0.10, rq);
+    float density = arms * (0.30 + 1.05 * clumps + 0.45 * clumps2) * diskProfile;
+    density = max(0.0, density - dust * diskProfile);
+    // shimmering star sparkle streaming through the arms
+    float sparkle = 0.72 + 0.55 * vnoise(rp * 7.0 + vec2(uTime * 0.9, -uTime * 0.6));
+    // colors: blue-white arms, warm core, pink star-forming knots
+    vec3 armCol = mix(vec3(0.72, 0.83, 1.30), vec3(0.95, 0.98, 1.15), clumps2);
+    float knot = smoothstep(0.68, 0.95, fbm(rp * 1.4 + 31.0)) * arms * diskProfile;
+    vec3 gal = armCol * density * sparkle;
+    gal += vec3(1.25, 0.45, 0.62) * knot * 0.9;
+    gal *= (1.05 + uFlare * 0.9 + uLoad * 0.35);
+    float glint = vnoise(rot(vec2(q.x, q.y) / gr, rotA * 1.35) * 26.0 + vec2(uTime * 0.5, -uTime * 0.35));
+    gal += armCol * density * smoothstep(0.74, 1.0, glint) * 0.85;
+    gal *= 1.0 + 0.20 * sin(rq * 15.0 - uTime * 3.0) * diskProfile;
+    // runner stars: bright points visibly orbiting in the disk plane
+    for (int i = 0; i < 24; i++) {
+      float fi = float(i);
+      float seed = hash(vec2(fi * 7.13, fi * 3.71));
+      float seed2 = hash(vec2(fi * 1.37, fi * 9.23));
+      float rad = 0.16 + 0.78 * seed;
+      float spd = (0.55 + uLoad * 1.1) / (0.30 + rad * 1.5);
+      float a = seed2 * 6.2831 + uTime * spd + uRot * 0.35;
+      vec2 sp = vec2(cos(a) * rad, sin(a) * rad * incl);
+      sp = rot(sp, tilt);
+      float d = length(pr - sp * gr);
+      float tw2 = 0.7 + 0.6 * sin(uTime * (2.0 + seed * 3.0) + fi);
+      col += vec3(1.15, 1.1, 1.05) * exp(-d * d / (gr * gr * 0.0011)) * (0.5 + seed * 0.7) * tw2;
+    }
+    // the bright heart: galactic bulge + core
+    float bulge = exp(-rq * 5.0);
+    float core = exp(-rq * 20.0);
+    vec3 heart = vec3(1.22, 1.05, 0.80) * bulge * (0.85 + 0.25 * sin(uTime * 0.8) * 0.3 + uFlare * 1.1);
+    heart += vec3(1.3, 1.18, 1.0) * core * (1.6 + uFlare * 2.2);
+    col += gal * 1.35 + heart;
+    // wide soft halo of the galaxy's light
+    col += vec3(0.55, 0.62, 0.85) * exp(-rq * 3.2) * (0.10 + uFlare * 0.10);
   }
 
-  // ---- far side of the disk (upper half of the inclined plane) ----
-  if (pr.y < 0.0 && rq > 1.5 && rq < 4.8) {
-    col += diskColor(rq, ang, rs) * (0.8 + 0.4 * fbm(p * (1.1 / rs)));
+  // ---- the black-hole charging gauge ----
+  {
+    vec2 pb = fc - uBHC;
+    float rb = length(pb);
+    float rsb = uBHRS;
+    if (rb < rsb * 5.4) {
+      float act = uBHChg;
+      float heat = 0.30 + 0.55 * uBHLevel + act * (0.35 + 0.15 * sin(uTime * 2.4));
+      float tiltB = -0.16, sqB = 0.36;
+      vec2 prb = rot(pb, tiltB);
+      vec2 qb = vec2(prb.x, prb.y / sqB);
+      float rqb = length(qb) / rsb;
+      float angb = atan(qb.y, qb.x);
+      if (rb < rsb * 4.4) {
+        float rD = clamp(2.35 * rsb - rb * 0.42, rsb * 1.5, rsb * 4.4) / rsb;
+        float aH = atan(-pb.y, pb.x);
+        float brk = 0.55 + 0.85 * fbm(pb * (1.4 / rsb) + vec2(uTime * 0.02, -uTime * 0.013));
+        col += bhDisk(rD, aH, heat, act) * smoothstep(rsb * 4.4, rsb * 1.15, rb) * smoothstep(rsb * 0.86, rsb * 1.12, rb) * 0.85 * brk;
+      }
+      if (prb.y < 0.0 && rqb > 1.5 && rqb < 4.8) col += bhDisk(rqb, angb, heat, act) * (0.8 + 0.4 * fbm(pb * (1.1 / rsb)));
+      if (rb < rsb) col = vec3(0.0);
+      float ring = exp(-pow((rb - rsb * 1.07) / (rsb * 0.085), 2.0));
+      float gaugeA = fract((atan(pb.y, pb.x) + 1.5708) / 6.2831);
+      float lit = step(gaugeA, uBHLevel);
+      vec3 ringCol = mix(vec3(0.45, 0.5, 0.65), vec3(1.2, 1.1, 0.95), lit);
+      col += ringCol * ring * (0.35 + 0.75 * lit + act * 0.5);
+      if (prb.y >= 0.0 && rqb > 1.5 && rqb < 4.8) col += bhDisk(rqb, angb, heat, act) * (0.88 + 0.24 * fbm(pb * (1.1 / rsb) + 7.0));
+      if (act > 0.01 && rb > rsb * 1.2 && rb < rsb * 5.2) {
+        float sa = atan(pb.y, pb.x);
+        float spiral = vnoise(vec2(sa * 4.0 + rb * 0.05 - uTime * 2.2, rb * 0.11 - uTime * 1.4));
+        col += vec3(0.9, 0.95, 1.2) * smoothstep(0.78, 1.0, spiral) * act * 0.8 * smoothstep(rsb * 5.2, rsb * 1.6, rb);
+      }
+    }
   }
-
-  // ---- the shadow ----
-  if (r < rs) col = vec3(0.0);
-
-  // ---- photon ring ----
-  float ring = exp(-pow((r - rs * 1.07) / (rs * 0.085), 2.0));
-  col += vec3(1.15, 1.05, 0.88) * ring * (0.75 + uFlare * 0.9 + uLoad * 0.25);
-
-  // ---- near side of the disk (passes in front of the shadow's lower rim) ----
-  if (pr.y >= 0.0 && rq > 1.5 && rq < 4.8) {
-    col += diskColor(rq, ang, rs) * (0.88 + 0.24 * fbm(p * (1.1 / rs) + 7.0));
-  }
-
-  // ---- wide ambient glow (bloom stand-in) ----
-  float glow = exp(-r / (rs * 3.4));
-  col += heatRamp(0.32) * glow * (0.10 + uFlare * 0.22 + uLoad * 0.05);
 
   // ---- tonemap + vignette ----
   col = vec3(1.0) - exp(-col * 1.25);
@@ -231,8 +291,8 @@ void main() {
   const fx = fxCanvas.getContext('2d');
   let W = 0, H = 0, DPR = 1;
 
-  function holePos() { return { x: W * 0.5, y: H * 0.335 }; }
-  function holeR() { return Math.min(W, H) * 0.052; }
+  function holePos() { return { x: W * 0.5, y: H * 0.36 }; }
+  function holeR() { return Math.min(W, H) * 0.44; }
 
   // ---------- time-of-day ambience ----------
   const KEYS = [
@@ -270,7 +330,7 @@ void main() {
     const aPos = gl.getAttribLocation(prog, 'aPos');
     gl.enableVertexAttribArray(aPos);
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-    for (const n of ['uTex', 'uRes', 'uTexRes', 'uCenter', 'uRS', 'uTime', 'uFlare', 'uLoad', 'uAmb', 'uPar']) uLoc[n] = gl.getUniformLocation(prog, n);
+    for (const n of ['uTex', 'uRes', 'uTexRes', 'uCenter', 'uGR', 'uTime', 'uRot', 'uFlare', 'uLoad', 'uAmb', 'uPar', 'uBHC', 'uBHRS', 'uBHLevel', 'uBHChg']) uLoc[n] = gl.getUniformLocation(prog, n);
 
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -298,7 +358,10 @@ void main() {
     'Veil': 'plate-veil.jpg',
     'Ember': 'plate-ember.jpg',
     'Ultraviolet': 'plate-ultraviolet.jpg',
-    'Mono': 'plate-mono.jpg'
+    'Mono': 'plate-mono.jpg',
+    'Veil 2': 'plate-veil-v2.jpg',
+    'Ember 2': 'plate-ember-v2.jpg',
+    'Mono 2': 'plate-mono-v2.jpg'
   };
   function fallbackPlate() {
     if (!plateUpload) return;
@@ -366,13 +429,13 @@ void main() {
     meteor:      { label: 'Meteor',            run() { spawnMeteor(); } },
     shower:      { label: 'Meteor shower',     run() { let n = 5 + (Math.random() * 4 | 0); const iv = setInterval(() => { spawnMeteor(); if (--n <= 0) clearInterval(iv); }, 260); } },
     feed:        { label: 'Feed a star',       run() { feedStar(W * (0.15 + Math.random() * 0.7), H * (0.08 + Math.random() * 0.2)); } },
-    flare:       { label: 'Disk flare',        run() { S.flare = 1; } },
-    supernova:   { label: 'Supernova',         run() { const hp = holePos(); novas.push({ x: hp.x, y: hp.y, r: holeR(), life: 1 }); S.flare = 1; } },
+    flare:       { label: 'Core flare',        run() { S.flare = 1; } },
+    supernova:   { label: 'Supernova',         run() { const hp = holePos(); novas.push({ x: hp.x, y: hp.y, r: holeR() * 0.15, life: 1 }); S.flare = 1; } },
     cometburst:  { label: 'Comet burst',       run() { for (let i = 0; i < 14; i++) { const a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 130; comets.push({ x: W * (0.3 + Math.random() * 0.4), y: H * (0.25 + Math.random() * 0.3), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1 }); } } },
     starbirth:   { label: 'Star birth',        run() { twinkles.push({ x: Math.random() * W, y: Math.random() * H * 0.85, r: 2.0, ph: 0, sp: 1.6, warm: Math.random() < 0.3 }); } },
     pulse:       { label: 'Palette pulse',     run() { S.huePulse = 1; } },
     quake:       { label: 'Sky quake',         run() { S.quake = 1; } },
-    loadspike:   { label: 'Load surge (disk spins up)', run() { S.load = 1; } }
+    loadspike:   { label: 'Load surge (galaxy spins up)', run() { S.load = 1; } }
   };
 
   // ---------- EVENTS ----------
@@ -413,7 +476,13 @@ void main() {
     toastEl.textContent = msg; toastEl.classList.add('show');
     clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400);
   }
-  function fireEvent(evKey) {
+  let bhLevel = 0.62, bhCharging = false, bhAct = 0, simBatt = false;
+  function fireEvent(evKey, simulated) {
+    if (simulated) {
+      if (evKey === 'charging') { simBatt = true; bhCharging = true; }
+      if (evKey === 'battfull') { simBatt = true; bhLevel = 1; bhCharging = false; }
+      if (evKey === 'battlow') { simBatt = true; bhLevel = 0.15; bhCharging = false; }
+    }
     const matched = rules.filter(r => r.ev === evKey);
     if (matched.length === 0) { toast(EVENTS[evKey] + ' · no trigger set'); return; }
     for (const r of matched) { if (EFFECTS[r.fx]) EFFECTS[r.fx].run(); }
@@ -435,11 +504,11 @@ void main() {
     });
     skyChips.appendChild(b);
   }
-  const simChips = document.getElementById('simChips');
+  const simChips = document.getElementById('dock');
   for (const key of Object.keys(EVENTS)) {
     const b = document.createElement('button');
-    b.className = 'chip'; b.textContent = EVENTS[key];
-    b.addEventListener('click', () => fireEvent(key));
+    b.textContent = EVENTS[key];
+    b.addEventListener('click', () => fireEvent(key, true));
     simChips.appendChild(b);
   }
   const srcSel = document.getElementById('evSource'), fxSel = document.getElementById('evEffect');
@@ -515,10 +584,11 @@ void main() {
   // ---------- render ----------
   const stage = document.getElementById('stage');
   const loadBar = document.getElementById('loadBar');
-  let last = performance.now(), tSec = 0, loadShown = -1;
+  let last = performance.now(), tSec = 0, loadShown = -1, rotA = 0;
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const dt = Math.min(0.25, (now - last) / 1000); last = now;
     tSec += dt;
+    rotA += dt * (0.42 + S.load * 0.75 + S.flare * 0.15);
     S.flare = Math.max(0, S.flare - dt * 0.7);
     S.load = Math.max(0, S.load - dt * 0.12);
     S.huePulse = Math.max(0, S.huePulse - dt * 0.45);
@@ -533,12 +603,21 @@ void main() {
       gl.uniform2f(uLoc.uRes, glCanvas.width, glCanvas.height);
       gl.uniform2f(uLoc.uTexRes, texW, texH);
       gl.uniform2f(uLoc.uCenter, hp.x * DPR, hp.y * DPR);
-      gl.uniform1f(uLoc.uRS, hr * DPR);
+      gl.uniform1f(uLoc.uGR, hr * DPR);
+      gl.uniform1f(uLoc.uRot, rotA);
       gl.uniform1f(uLoc.uTime, tSec);
       gl.uniform1f(uLoc.uFlare, S.flare);
       gl.uniform1f(uLoc.uLoad, S.load);
       gl.uniform1f(uLoc.uAmb, ambience());
       gl.uniform2f(uLoc.uPar, -parX * 9 * DPR, -parY * 9 * DPR);
+      if (batt && !simBatt) { bhLevel = batt.level; bhCharging = batt.charging; }
+      else if (bhCharging) { bhLevel = Math.min(1, bhLevel + dt * 0.03); if (bhLevel >= 1) bhCharging = false; }
+      bhAct += ((bhCharging ? 1 : 0) - bhAct) * Math.min(1, dt * 3);
+      const bhMin = Math.min(W, H);
+      gl.uniform2f(uLoc.uBHC, (W - bhMin * 0.185) * DPR, (H - bhMin * 0.34) * DPR);
+      gl.uniform1f(uLoc.uBHRS, bhMin * 0.034 * DPR);
+      gl.uniform1f(uLoc.uBHLevel, bhLevel);
+      gl.uniform1f(uLoc.uBHChg, bhAct);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
@@ -612,21 +691,8 @@ void main() {
       g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(150,180,255,0)');
       fx.fillStyle = g; fx.beginPath(); fx.ellipse(0, 0, 5 + stretch, 3.2, 0, 0, 7); fx.fill();
       fx.restore();
-      if (dist < hr * 1.25) { fed.splice(i, 1); S.flare = 1; }
+      if (dist < hr * 0.14) { fed.splice(i, 1); S.flare = 1; }
       else if (dist > Math.max(W, H) * 1.4) fed.splice(i, 1);
-    }
-
-    if (batt) {
-      const mx = W - 44, my = H - 108, mr = 15;
-      const lvl = batt.level, charging = batt.charging;
-      fx.save();
-      fx.fillStyle = 'rgba(200,210,235,0.16)';
-      fx.beginPath(); fx.arc(mx, my, mr, 0, 7); fx.fill();
-      fx.fillStyle = charging ? 'rgba(255,236,170,0.92)' : 'rgba(215,226,250,0.9)';
-      fx.beginPath(); fx.arc(mx, my, mr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * lvl); fx.lineTo(mx, my); fx.fill();
-      fx.fillStyle = 'rgba(3,3,10,0.55)';
-      fx.beginPath(); fx.arc(mx - 4, my - 3, 2.6, 0, 7); fx.arc(mx + 5, my + 5, 2, 0, 7); fx.fill();
-      fx.restore();
     }
 
     const lp = Math.round(S.load * 100);
