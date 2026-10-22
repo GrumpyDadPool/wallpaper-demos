@@ -188,12 +188,13 @@ void main() {
     float aH = atan(-p.y, p.x);
     vec3 halo = diskColor(rD, aH, rs);
     float haloFall = smoothstep(rs * 4.4, rs * 1.15, r) * smoothstep(rs * 0.86, rs * 1.12, r);
-    col += halo * haloFall * 0.85;
+    float breakup = 0.55 + 0.85 * fbm(p * (1.4 / rs) + vec2(uTime * 0.02, -uTime * 0.013));
+    col += halo * haloFall * 0.85 * breakup;
   }
 
   // ---- far side of the disk (upper half of the inclined plane) ----
   if (pr.y < 0.0 && rq > 1.5 && rq < 4.8) {
-    col += diskColor(rq, ang, rs);
+    col += diskColor(rq, ang, rs) * (0.8 + 0.4 * fbm(p * (1.1 / rs)));
   }
 
   // ---- the shadow ----
@@ -205,7 +206,7 @@ void main() {
 
   // ---- near side of the disk (passes in front of the shadow's lower rim) ----
   if (pr.y >= 0.0 && rq > 1.5 && rq < 4.8) {
-    col += diskColor(rq, ang, rs);
+    col += diskColor(rq, ang, rs) * (0.88 + 0.24 * fbm(p * (1.1 / rs) + 7.0));
   }
 
   // ---- wide ambient glow (bloom stand-in) ----
