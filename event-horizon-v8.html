@@ -443,7 +443,7 @@ void main() {
   function feedStar(x, y) { fed.push({ x, y, vx: 0, vy: 0, life: 1 }); }
   function spawnMeteor() {
     const sx = Math.random() * W * 0.8 + W * 0.1, sy = Math.random() * H * 0.25;
-    const ang = Math.PI * (0.72 + Math.random() * 0.12), sp = 520 + Math.random() * 260;
+    const ang = Math.PI * (0.72 + Math.random() * 0.12), sp = 400 + Math.random() * 200;
     meteors.push({ x: sx, y: sy, vx: Math.cos(ang) * sp, vy: -Math.sin(ang) * sp * 0.45, life: 1 });
   }
 
@@ -461,7 +461,7 @@ void main() {
     loadspike:   { label: 'Load surge (galaxy spins up)', run() { S.load = 1; } },
     solarflare:  { label: 'Solar flare',       run() { shows.push({ kind: 'solarflare', t: 0, dur: 2.6, a: (Math.random() - 0.5) * 0.7 }); S.flare = Math.max(S.flare, 0.55); } },
     alienship:   { label: 'Alien flyby',       run() { shows.push({ kind: 'ship', t: 0, dur: 5.4 }); } },
-    satellite:   { label: 'Satellite pass',    run() { shows.push({ kind: 'sat', t: 0, dur: 7.5 }); } },
+    satellite:   { label: 'Satellite pass',    run() { shows.push({ kind: 'sat', t: 0, dur: 9 }); } },
     pulsar:      { label: 'Pulsar',            run() { shows.push({ kind: 'pulsar', t: 0, dur: 3.6, x: W * 0.15, y: H * 0.12, seed: Math.random() * 6 }); } },
     eclipse:     { label: 'Eclipse',           run() { shows.push({ kind: 'eclipse', t: 0, dur: 5.2 }); } },
     aurora:      { label: 'Aurora',            run() { shows.push({ kind: 'aurora', t: 0, dur: 9 }); } }
@@ -718,21 +718,22 @@ void main() {
 
     for (let i = meteors.length - 1; i >= 0; i--) {
       const m = meteors[i];
-      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt * 0.55;
+      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt * 0.38;
       if (m.life <= 0) { meteors.splice(i, 1); continue; }
       const tail = 0.16, tx = m.x - m.vx * tail, ty = m.y - m.vy * tail;
       fx.save(); fx.lineCap = 'round';
       let g = fx.createLinearGradient(m.x, m.y, tx, ty);
-      g.addColorStop(0, `rgba(170,200,255,${0.28 * m.life})`); g.addColorStop(1, 'rgba(170,200,255,0)');
-      fx.strokeStyle = g; fx.lineWidth = 5.5;
+      g.addColorStop(0, `rgba(180,210,255,${0.42 * m.life})`); g.addColorStop(1, 'rgba(170,200,255,0)');
+      fx.strokeStyle = g; fx.lineWidth = 9;
       fx.beginPath(); fx.moveTo(m.x, m.y); fx.lineTo(tx, ty); fx.stroke();
       g = fx.createLinearGradient(m.x, m.y, tx, ty);
       g.addColorStop(0, `rgba(255,255,255,${0.9 * m.life})`); g.addColorStop(1, 'rgba(255,255,255,0)');
       fx.strokeStyle = g; fx.lineWidth = 2;
       fx.beginPath(); fx.moveTo(m.x, m.y); fx.lineTo(tx, ty); fx.stroke();
-      const hg = fx.createRadialGradient(m.x, m.y, 0, m.x, m.y, 6);
-      hg.addColorStop(0, `rgba(255,255,255,${0.95 * m.life})`); hg.addColorStop(0.4, `rgba(200,225,255,${0.5 * m.life})`); hg.addColorStop(1, 'rgba(160,190,255,0)');
-      fx.fillStyle = hg; fx.beginPath(); fx.arc(m.x, m.y, 6, 0, 7); fx.fill();
+      const hg = fx.createRadialGradient(m.x, m.y, 0, m.x, m.y, 11);
+      hg.addColorStop(0, `rgba(255,255,255,${0.98 * m.life})`); hg.addColorStop(0.35, `rgba(205,230,255,${0.6 * m.life})`); hg.addColorStop(1, 'rgba(160,190,255,0)');
+      fx.fillStyle = hg; fx.beginPath(); fx.arc(m.x, m.y, 11, 0, 7); fx.fill();
+      fx.fillStyle = `rgba(255,255,255,${0.95 * m.life})`; fx.beginPath(); fx.arc(m.x, m.y, 2.6, 0, 7); fx.fill();
       fx.restore();
     }
 
@@ -839,12 +840,12 @@ void main() {
         fx.strokeStyle = 'rgba(190,210,255,0.25)'; fx.lineWidth = 1;
         fx.beginPath(); fx.moveTo(sx - Math.cos(ang) * 90, sy - Math.sin(ang) * 90); fx.lineTo(sx, sy); fx.stroke();
         fx.translate(sx, sy); fx.rotate(ang);
-        fx.fillStyle = '#cfd8e6'; fx.fillRect(-4.5, -4.5, 9, 9);
-        fx.fillStyle = '#42506a'; fx.fillRect(-4.5, -1, 9, 2);
-        fx.fillStyle = '#5f7fb8'; fx.fillRect(-19, -3.2, 12, 6.4); fx.fillRect(7, -3.2, 12, 6.4);
-        fx.fillStyle = 'rgba(220,235,255,0.5)'; fx.fillRect(-13.5, -3.2, 1, 6.4); fx.fillRect(12.5, -3.2, 1, 6.4);
+        fx.fillStyle = '#e6edf7'; fx.fillRect(-6.5, -6.5, 13, 13);
+        fx.fillStyle = '#42506a'; fx.fillRect(-6.5, -1.5, 13, 3);
+        fx.fillStyle = '#6f97d8'; fx.fillRect(-27, -4.5, 17, 9); fx.fillRect(10, -4.5, 17, 9);
+        fx.fillStyle = 'rgba(230,242,255,0.65)'; fx.fillRect(-19, -4.5, 1.4, 9); fx.fillRect(18, -4.5, 1.4, 9);
         fx.restore();
-        if ((sh.t % 0.8) < 0.4) { fx.save(); fx.fillStyle = `rgba(255,255,255,${0.95 * fadeIO})`; fx.beginPath(); fx.arc(sx, sy, 3, 0, 7); fx.fill(); fx.restore(); }
+        if ((sh.t % 0.8) < 0.4) { fx.save(); fx.fillStyle = `rgba(255,255,255,${0.95 * fadeIO})`; fx.beginPath(); fx.arc(sx, sy, 4.2, 0, 7); fx.fill(); fx.restore(); }
       } else if (sh.kind === 'pulsar') {
         const rot = sh.t * 2.4 + sh.seed;
         const strobe = 0.35 + 0.65 * Math.pow(0.5 + 0.5 * Math.sin(sh.t * 14), 2);
