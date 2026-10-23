@@ -471,8 +471,8 @@ void main() {
       meteors.push({ x: sx, y: sy, vx: Math.cos(ang) * sp, vy: -Math.sin(ang) * sp * 0.30, life: 1, big: true });
     } else {
       const sx = Math.random() * W * 0.8 + W * 0.1, sy = Math.random() * H * 0.25;
-      const ang = Math.PI * (0.72 + Math.random() * 0.12), sp = 250 + Math.random() * 90;
-      meteors.push({ x: sx, y: sy, vx: Math.cos(ang) * sp, vy: -Math.sin(ang) * sp * 0.45, life: 1 });
+      const ang = Math.PI * (0.72 + Math.random() * 0.12), sp = 185 + Math.random() * 60;
+      meteors.push({ x: sx, y: sy, vx: Math.cos(ang) * sp, vy: -Math.sin(ang) * sp * 0.40, life: 1 });
     }
   }
 
@@ -726,10 +726,20 @@ void main() {
       fx.globalAlpha = tw * 0.75;
       fx.fillStyle = s.col || (s.warm ? '#ffe3c2' : '#dfe8ff');
       fx.beginPath(); fx.arc(sx2, sy2, s.r, 0, 7); fx.fill();
-      if (s.r >= 1.55) {
-        const L = s.r * (4.5 + 3.5 * tw);
-        fx.globalAlpha = tw * 0.45; fx.strokeStyle = fx.fillStyle; fx.lineWidth = 1;
-        fx.beginPath(); fx.moveTo(sx2 - L, sy2); fx.lineTo(sx2 + L, sy2); fx.moveTo(sx2, sy2 - L); fx.lineTo(sx2, sy2 + L); fx.stroke();
+      if (s.r >= 1.7 && tw > 0.82) {
+        const ga = Math.min(1, (tw - 0.82) * 2.4), L = s.r * 3.1;
+        fx.save();
+        const hg2 = fx.createRadialGradient(sx2, sy2, 0, sx2, sy2, s.r * 3.4);
+        hg2.addColorStop(0, `rgba(255,255,255,${0.30 * ga})`); hg2.addColorStop(1, 'rgba(255,255,255,0)');
+        fx.fillStyle = hg2; fx.beginPath(); fx.arc(sx2, sy2, s.r * 3.4, 0, 7); fx.fill();
+        fx.lineWidth = 1;
+        let lg = fx.createLinearGradient(sx2 - L, sy2, sx2 + L, sy2);
+        lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, `rgba(255,255,255,${0.55 * ga})`); lg.addColorStop(1, 'rgba(255,255,255,0)');
+        fx.strokeStyle = lg; fx.beginPath(); fx.moveTo(sx2 - L, sy2); fx.lineTo(sx2 + L, sy2); fx.stroke();
+        lg = fx.createLinearGradient(sx2, sy2 - L, sx2, sy2 + L);
+        lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, `rgba(255,255,255,${0.55 * ga})`); lg.addColorStop(1, 'rgba(255,255,255,0)');
+        fx.strokeStyle = lg; fx.beginPath(); fx.moveTo(sx2, sy2 - L); fx.lineTo(sx2, sy2 + L); fx.stroke();
+        fx.restore();
       }
     }
     fx.globalAlpha = 1;
@@ -759,10 +769,10 @@ void main() {
 
     for (let i = meteors.length - 1; i >= 0; i--) {
       const m = meteors[i];
-      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt * (m.big ? 0.16 : 0.30);
+      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt * (m.big ? 0.16 : 0.22);
       if (m.life <= 0) { meteors.splice(i, 1); continue; }
-      const BS = m.big ? 1.7 : 1;
-      const tail = m.big ? 0.55 : 0.34, tx = m.x - m.vx * tail, ty = m.y - m.vy * tail;
+      const BS = m.big ? 1.7 : 1.15;
+      const tail = m.big ? 0.55 : 0.45, tx = m.x - m.vx * tail, ty = m.y - m.vy * tail;
       const spd = Math.max(1, Math.hypot(m.vx, m.vy));
       const px = -m.vy / spd, py = m.vx / spd, hw = 8 * BS;
       fx.save();
@@ -778,8 +788,6 @@ void main() {
       hg.addColorStop(0, `rgba(255,255,255,${0.98 * m.life})`); hg.addColorStop(0.3, `rgba(210,235,255,${0.65 * m.life})`); hg.addColorStop(1, 'rgba(160,190,255,0)');
       fx.fillStyle = hg; fx.beginPath(); fx.arc(m.x, m.y, 17 * BS, 0, 7); fx.fill();
       fx.fillStyle = `rgba(255,255,255,${0.97 * m.life})`; fx.beginPath(); fx.arc(m.x, m.y, 3.6 * BS, 0, 7); fx.fill();
-      fx.strokeStyle = `rgba(255,255,255,${0.55 * m.life})`; fx.lineWidth = 1.2;
-      fx.beginPath(); fx.moveTo(m.x - 13 * BS, m.y); fx.lineTo(m.x + 13 * BS, m.y); fx.moveTo(m.x, m.y - 13 * BS); fx.lineTo(m.x, m.y + 13 * BS); fx.stroke();
       fx.restore();
     }
 
@@ -822,11 +830,12 @@ void main() {
       s.vy += (dx / dist) * pull * dt * 22;
       s.vx *= 0.995; s.vy *= 0.995;
       s.x += s.vx * dt * 3.2; s.y += s.vy * dt * 3.2;
-      const stretch = Math.min(13, Math.hypot(s.vx, s.vy) * 0.09);
+      const stretch = Math.min(9, Math.hypot(s.vx, s.vy) * 0.09);
       fx.save(); fx.translate(s.x, s.y); fx.rotate(Math.atan2(s.vy, s.vx));
       const g = fx.createRadialGradient(0, 0, 0, 0, 0, 8);
       g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(150,180,255,0)');
-      fx.fillStyle = g; fx.beginPath(); fx.ellipse(0, 0, 5 + stretch, 3.2, 0, 0, 7); fx.fill();
+      fx.fillStyle = g; fx.beginPath(); fx.ellipse(0, 0, 5 + stretch * 0.6, 3.4 + stretch * 0.25, 0, 0, 7); fx.fill();
+      fx.fillStyle = 'rgba(255,255,255,0.95)'; fx.beginPath(); fx.arc(0, 0, 2.1, 0, 7); fx.fill();
       fx.restore();
       if (dist < hr * 0.14) { fed.splice(i, 1); S.flare = 1; }
       else if (dist > Math.max(W, H) * 1.4) fed.splice(i, 1);
