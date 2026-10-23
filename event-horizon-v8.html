@@ -443,7 +443,7 @@ void main() {
   function feedStar(x, y) { fed.push({ x, y, vx: 0, vy: 0, life: 1 }); }
   function spawnMeteor() {
     const sx = Math.random() * W * 0.8 + W * 0.1, sy = Math.random() * H * 0.25;
-    const ang = Math.PI * (0.72 + Math.random() * 0.12), sp = 400 + Math.random() * 200;
+    const ang = Math.PI * (0.72 + Math.random() * 0.12), sp = 250 + Math.random() * 90;
     meteors.push({ x: sx, y: sy, vx: Math.cos(ang) * sp, vy: -Math.sin(ang) * sp * 0.45, life: 1 });
   }
 
@@ -718,22 +718,26 @@ void main() {
 
     for (let i = meteors.length - 1; i >= 0; i--) {
       const m = meteors[i];
-      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt * 0.38;
+      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt * 0.30;
       if (m.life <= 0) { meteors.splice(i, 1); continue; }
-      const tail = 0.16, tx = m.x - m.vx * tail, ty = m.y - m.vy * tail;
-      fx.save(); fx.lineCap = 'round';
+      const tail = 0.34, tx = m.x - m.vx * tail, ty = m.y - m.vy * tail;
+      const spd = Math.max(1, Math.hypot(m.vx, m.vy));
+      const px = -m.vy / spd, py = m.vx / spd, hw = 8;
+      fx.save();
       let g = fx.createLinearGradient(m.x, m.y, tx, ty);
-      g.addColorStop(0, `rgba(180,210,255,${0.42 * m.life})`); g.addColorStop(1, 'rgba(170,200,255,0)');
-      fx.strokeStyle = g; fx.lineWidth = 9;
-      fx.beginPath(); fx.moveTo(m.x, m.y); fx.lineTo(tx, ty); fx.stroke();
+      g.addColorStop(0, `rgba(200,225,255,${0.55 * m.life})`); g.addColorStop(0.5, `rgba(170,200,255,${0.22 * m.life})`); g.addColorStop(1, 'rgba(170,200,255,0)');
+      fx.fillStyle = g;
+      fx.beginPath(); fx.moveTo(m.x + px * hw, m.y + py * hw); fx.lineTo(m.x - px * hw, m.y - py * hw); fx.lineTo(tx, ty); fx.closePath(); fx.fill();
       g = fx.createLinearGradient(m.x, m.y, tx, ty);
-      g.addColorStop(0, `rgba(255,255,255,${0.9 * m.life})`); g.addColorStop(1, 'rgba(255,255,255,0)');
-      fx.strokeStyle = g; fx.lineWidth = 2;
-      fx.beginPath(); fx.moveTo(m.x, m.y); fx.lineTo(tx, ty); fx.stroke();
-      const hg = fx.createRadialGradient(m.x, m.y, 0, m.x, m.y, 11);
-      hg.addColorStop(0, `rgba(255,255,255,${0.98 * m.life})`); hg.addColorStop(0.35, `rgba(205,230,255,${0.6 * m.life})`); hg.addColorStop(1, 'rgba(160,190,255,0)');
-      fx.fillStyle = hg; fx.beginPath(); fx.arc(m.x, m.y, 11, 0, 7); fx.fill();
-      fx.fillStyle = `rgba(255,255,255,${0.95 * m.life})`; fx.beginPath(); fx.arc(m.x, m.y, 2.6, 0, 7); fx.fill();
+      g.addColorStop(0, `rgba(255,255,255,${0.85 * m.life})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+      fx.fillStyle = g;
+      fx.beginPath(); fx.moveTo(m.x + px * 2.6, m.y + py * 2.6); fx.lineTo(m.x - px * 2.6, m.y - py * 2.6); fx.lineTo(tx, ty); fx.closePath(); fx.fill();
+      const hg = fx.createRadialGradient(m.x, m.y, 0, m.x, m.y, 17);
+      hg.addColorStop(0, `rgba(255,255,255,${0.98 * m.life})`); hg.addColorStop(0.3, `rgba(210,235,255,${0.65 * m.life})`); hg.addColorStop(1, 'rgba(160,190,255,0)');
+      fx.fillStyle = hg; fx.beginPath(); fx.arc(m.x, m.y, 17, 0, 7); fx.fill();
+      fx.fillStyle = `rgba(255,255,255,${0.97 * m.life})`; fx.beginPath(); fx.arc(m.x, m.y, 3.6, 0, 7); fx.fill();
+      fx.strokeStyle = `rgba(255,255,255,${0.55 * m.life})`; fx.lineWidth = 1.2;
+      fx.beginPath(); fx.moveTo(m.x - 13, m.y); fx.lineTo(m.x + 13, m.y); fx.moveTo(m.x, m.y - 13); fx.lineTo(m.x, m.y + 13); fx.stroke();
       fx.restore();
     }
 
