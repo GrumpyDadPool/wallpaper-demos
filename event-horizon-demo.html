@@ -441,27 +441,33 @@ void main() {
   // ---------- transient objects ----------
   const fed = [], comets = [], meteors = [], novas = [], shows = [];
   function feedStar(x, y) { fed.push({ x, y, vx: 0, vy: 0, life: 1 }); }
-  function spawnMeteor() {
-    const sx = Math.random() * W * 0.8 + W * 0.1, sy = Math.random() * H * 0.25;
-    const ang = Math.PI * (0.72 + Math.random() * 0.12), sp = 520 + Math.random() * 260;
-    meteors.push({ x: sx, y: sy, vx: Math.cos(ang) * sp, vy: -Math.sin(ang) * sp * 0.45, life: 1 });
+  function spawnMeteor(big) {
+    if (big === true) {
+      const sx = W * (0.55 + Math.random() * 0.3), sy = H * (0.30 + Math.random() * 0.15);
+      const ang = Math.PI * (0.78 + Math.random() * 0.10), sp = Math.max(150, W * 0.20) + Math.random() * 30;
+      meteors.push({ x: sx, y: sy, vx: Math.cos(ang) * sp, vy: -Math.sin(ang) * sp * 0.30, life: 1, big: true });
+    } else {
+      const sx = Math.random() * W * 0.8 + W * 0.1, sy = Math.random() * H * 0.25;
+      const ang = Math.PI * (0.72 + Math.random() * 0.12), sp = 250 + Math.random() * 90;
+      meteors.push({ x: sx, y: sy, vx: Math.cos(ang) * sp, vy: -Math.sin(ang) * sp * 0.45, life: 1 });
+    }
   }
 
   // ---------- EFFECTS ----------
   const EFFECTS = {
-    meteor:      { label: 'Meteor',            run() { spawnMeteor(); } },
+    meteor:      { label: 'Meteor',            run() { spawnMeteor(true); } },
     shower:      { label: 'Meteor shower',     run() { let n = 5 + (Math.random() * 4 | 0); const iv = setInterval(() => { spawnMeteor(); if (--n <= 0) clearInterval(iv); }, 260); } },
     feed:        { label: 'Feed a star',       run() { feedStar(W * (0.15 + Math.random() * 0.7), H * (0.08 + Math.random() * 0.2)); } },
     flare:       { label: 'Core flare',        run() { S.flare = 1; } },
     supernova:   { label: 'Supernova',         run() { const hp = holePos(); novas.push({ x: hp.x, y: hp.y, r: holeR() * 0.15, life: 1 }); S.flare = 1; } },
     cometburst:  { label: 'Comet burst',       run() { for (let i = 0; i < 14; i++) { const a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 130; comets.push({ x: W * (0.3 + Math.random() * 0.4), y: H * (0.25 + Math.random() * 0.3), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1 }); } } },
-    starbirth:   { label: 'Star birth',        run() { twinkles.push({ x: Math.random() * W, y: Math.random() * H * 0.85, r: 2.0, ph: 0, sp: 1.6, warm: Math.random() < 0.3 }); } },
+    starbirth:   { label: 'Star birth',        run() { const bx = Math.random() * W, by = Math.random() * H * 0.85; shows.push({ kind: 'starbirth', t: 0, dur: 2.2, x: bx, y: by }); twinkles.push({ x: bx, y: by, r: 2.0, ph: 0, sp: 1.6, warm: Math.random() < 0.3 }); } },
     pulse:       { label: 'Palette pulse',     run() { S.huePulse = 1; } },
     quake:       { label: 'Sky quake',         run() { S.quake = 1; } },
     loadspike:   { label: 'Load surge (galaxy spins up)', run() { S.load = 1; } },
-    solarflare:  { label: 'Solar flare',       run() { shows.push({ kind: 'solarflare', t: 0, dur: 1.8, a: -0.9 + Math.random() * 0.6 }); S.flare = Math.max(S.flare, 0.55); } },
+    solarflare:  { label: 'Solar flare',       run() { shows.push({ kind: 'solarflare', t: 0, dur: 2.6, a: (Math.random() - 0.5) * 0.7 }); S.flare = Math.max(S.flare, 0.55); } },
     alienship:   { label: 'Alien flyby',       run() { shows.push({ kind: 'ship', t: 0, dur: 5.4 }); } },
-    satellite:   { label: 'Satellite pass',    run() { shows.push({ kind: 'sat', t: 0, dur: 6.5 }); } },
+    satellite:   { label: 'Satellite pass',    run() { shows.push({ kind: 'sat', t: 0, dur: 9 }); } },
     pulsar:      { label: 'Pulsar',            run() { shows.push({ kind: 'pulsar', t: 0, dur: 3.6, x: W * 0.15, y: H * 0.12, seed: Math.random() * 6 }); } },
     eclipse:     { label: 'Eclipse',           run() { shows.push({ kind: 'eclipse', t: 0, dur: 5.2 }); } },
     aurora:      { label: 'Aurora',            run() { shows.push({ kind: 'aurora', t: 0, dur: 9 }); } }
@@ -605,7 +611,8 @@ void main() {
     if (!dragging) return;
     const dx = e.clientX - lastPX, dy = e.clientY - lastPY;
     moved += Math.abs(dx) + Math.abs(dy);
-    comets.push({ x: e.clientX, y: e.clientY, vx: dx * 6, vy: dy * 6, life: 1 });
+    const steps = Math.min(6, Math.max(1, Math.floor(Math.hypot(dx, dy) / 9)));
+    for (let s2 = 1; s2 <= steps; s2++) comets.push({ x: lastPX + dx * s2 / steps, y: lastPY + dy * s2 / steps, vx: dx * 6, vy: dy * 6, life: 1 });
     if (comets.length > 90) comets.shift();
     tParX = (e.clientX / W - 0.5) * 2; tParY = (e.clientY / H - 0.5) * 2;
     lastPX = e.clientX; lastPY = e.clientY;
@@ -681,29 +688,77 @@ void main() {
 
     for (const s of twinkles) {
       const tw = 0.5 + 0.5 * Math.sin(now * 0.001 * s.sp + s.ph);
+      const sx2 = s.x - parX * 5, sy2 = s.y - parY * 5;
       fx.globalAlpha = tw * 0.75;
       fx.fillStyle = s.warm ? '#ffe3c2' : '#dfe8ff';
-      fx.beginPath(); fx.arc(s.x - parX * 5, s.y - parY * 5, s.r, 0, 7); fx.fill();
+      fx.beginPath(); fx.arc(sx2, sy2, s.r, 0, 7); fx.fill();
+      if (s.r >= 1.55) {
+        const L = s.r * (4.5 + 3.5 * tw);
+        fx.globalAlpha = tw * 0.45; fx.strokeStyle = fx.fillStyle; fx.lineWidth = 1;
+        fx.beginPath(); fx.moveTo(sx2 - L, sy2); fx.lineTo(sx2 + L, sy2); fx.moveTo(sx2, sy2 - L); fx.lineTo(sx2, sy2 + L); fx.stroke();
+      }
     }
     fx.globalAlpha = 1;
 
+    // ---- the sun: persistent foreground star, source of the solar flare ----
+    const sunPos = { x: W * 0.85, y: H * 0.13, r: Math.max(10, Math.min(W, H) * 0.03) };
+    {
+      let fBoost = 0;
+      for (const sh2 of shows) if (sh2.kind === 'solarflare') fBoost = Math.max(fBoost, Math.sin(Math.PI * Math.min(1, sh2.t / sh2.dur)));
+      const flick = 0.94 + 0.06 * Math.sin(now * 0.0031) * Math.sin(now * 0.0017 + 2);
+      fx.save(); fx.globalCompositeOperation = 'lighter';
+      const corR = sunPos.r * 6.2 * (1 + 0.3 * fBoost);
+      let g = fx.createRadialGradient(sunPos.x, sunPos.y, 0, sunPos.x, sunPos.y, corR);
+      g.addColorStop(0, `rgba(255,236,190,${0.50 * flick})`); g.addColorStop(0.25, `rgba(255,205,120,${0.20 * flick})`); g.addColorStop(1, 'rgba(255,160,60,0)');
+      fx.fillStyle = g; fx.beginPath(); fx.arc(sunPos.x, sunPos.y, corR, 0, 7); fx.fill();
+      fx.globalAlpha = 0.10 + 0.05 * flick; fx.fillStyle = '#ffe9bb';
+      const rayL = sunPos.r * 7.2, rayW = sunPos.r * 0.15;
+      fx.beginPath(); fx.moveTo(sunPos.x - rayL, sunPos.y); fx.lineTo(sunPos.x, sunPos.y - rayW); fx.lineTo(sunPos.x + rayL, sunPos.y); fx.lineTo(sunPos.x, sunPos.y + rayW); fx.closePath(); fx.fill();
+      const rayL2 = rayL * 0.68;
+      fx.beginPath(); fx.moveTo(sunPos.x, sunPos.y - rayL2); fx.lineTo(sunPos.x + rayW, sunPos.y); fx.lineTo(sunPos.x, sunPos.y + rayL2); fx.lineTo(sunPos.x - rayW, sunPos.y); fx.closePath(); fx.fill();
+      fx.globalAlpha = 1;
+      g = fx.createRadialGradient(sunPos.x - sunPos.r * 0.3, sunPos.y - sunPos.r * 0.3, sunPos.r * 0.1, sunPos.x, sunPos.y, sunPos.r);
+      g.addColorStop(0, '#fffdf4'); g.addColorStop(0.75, '#ffedb8'); g.addColorStop(1, '#ffb45e');
+      fx.fillStyle = g; fx.beginPath(); fx.arc(sunPos.x, sunPos.y, sunPos.r, 0, 7); fx.fill();
+      fx.restore();
+    }
+
     for (let i = meteors.length - 1; i >= 0; i--) {
       const m = meteors[i];
-      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt * 0.55;
+      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt * (m.big ? 0.16 : 0.30);
       if (m.life <= 0) { meteors.splice(i, 1); continue; }
-      const tail = 0.14;
-      const g = fx.createLinearGradient(m.x, m.y, m.x - m.vx * tail, m.y - m.vy * tail);
+      const BS = m.big ? 1.7 : 1;
+      const tail = m.big ? 0.55 : 0.34, tx = m.x - m.vx * tail, ty = m.y - m.vy * tail;
+      const spd = Math.max(1, Math.hypot(m.vx, m.vy));
+      const px = -m.vy / spd, py = m.vx / spd, hw = 8 * BS;
+      fx.save();
+      let g = fx.createLinearGradient(m.x, m.y, tx, ty);
+      g.addColorStop(0, `rgba(200,225,255,${0.55 * m.life})`); g.addColorStop(0.5, `rgba(170,200,255,${0.22 * m.life})`); g.addColorStop(1, 'rgba(170,200,255,0)');
+      fx.fillStyle = g;
+      fx.beginPath(); fx.moveTo(m.x + px * hw, m.y + py * hw); fx.lineTo(m.x - px * hw, m.y - py * hw); fx.lineTo(tx, ty); fx.closePath(); fx.fill();
+      g = fx.createLinearGradient(m.x, m.y, tx, ty);
       g.addColorStop(0, `rgba(255,255,255,${0.85 * m.life})`); g.addColorStop(1, 'rgba(255,255,255,0)');
-      fx.strokeStyle = g; fx.lineWidth = 1.6;
-      fx.beginPath(); fx.moveTo(m.x, m.y); fx.lineTo(m.x - m.vx * tail, m.y - m.vy * tail); fx.stroke();
+      fx.fillStyle = g;
+      fx.beginPath(); fx.moveTo(m.x + px * 2.6, m.y + py * 2.6); fx.lineTo(m.x - px * 2.6, m.y - py * 2.6); fx.lineTo(tx, ty); fx.closePath(); fx.fill();
+      const hg = fx.createRadialGradient(m.x, m.y, 0, m.x, m.y, 17 * BS);
+      hg.addColorStop(0, `rgba(255,255,255,${0.98 * m.life})`); hg.addColorStop(0.3, `rgba(210,235,255,${0.65 * m.life})`); hg.addColorStop(1, 'rgba(160,190,255,0)');
+      fx.fillStyle = hg; fx.beginPath(); fx.arc(m.x, m.y, 17 * BS, 0, 7); fx.fill();
+      fx.fillStyle = `rgba(255,255,255,${0.97 * m.life})`; fx.beginPath(); fx.arc(m.x, m.y, 3.6 * BS, 0, 7); fx.fill();
+      fx.strokeStyle = `rgba(255,255,255,${0.55 * m.life})`; fx.lineWidth = 1.2;
+      fx.beginPath(); fx.moveTo(m.x - 13 * BS, m.y); fx.lineTo(m.x + 13 * BS, m.y); fx.moveTo(m.x, m.y - 13 * BS); fx.lineTo(m.x, m.y + 13 * BS); fx.stroke();
+      fx.restore();
     }
 
     for (let i = comets.length - 1; i >= 0; i--) {
       const c = comets[i];
       c.x += c.vx * dt; c.y += c.vy * dt; c.vx *= 0.94; c.vy *= 0.94; c.life -= dt * 1.5;
       if (c.life <= 0) { comets.splice(i, 1); continue; }
+      fx.save(); fx.lineCap = 'round';
+      fx.strokeStyle = `rgba(190,220,255,${0.55 * c.life})`; fx.lineWidth = 2;
+      fx.beginPath(); fx.moveTo(c.x, c.y); fx.lineTo(c.x - c.vx * 0.09, c.y - c.vy * 0.09); fx.stroke();
+      fx.restore();
       const g = fx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 9);
-      g.addColorStop(0, `rgba(210,235,255,${0.8 * c.life})`); g.addColorStop(1, 'rgba(120,160,255,0)');
+      g.addColorStop(0, `rgba(230,245,255,${0.9 * c.life})`); g.addColorStop(1, 'rgba(120,160,255,0)');
       fx.fillStyle = g; fx.beginPath(); fx.arc(c.x, c.y, 9, 0, 7); fx.fill();
     }
 
@@ -711,11 +766,16 @@ void main() {
       const n = novas[i];
       n.r += dt * 340; n.life -= dt * 0.85;
       if (n.life <= 0) { novas.splice(i, 1); continue; }
-      fx.strokeStyle = `hsla(45,100%,80%,${0.75 * n.life})`;
-      fx.lineWidth = 2.4;
-      fx.beginPath(); fx.arc(n.x, n.y, n.r, 0, 7); fx.stroke();
-      fx.strokeStyle = `hsla(28,100%,62%,${0.4 * n.life})`;
-      fx.beginPath(); fx.arc(n.x, n.y, n.r * 0.82, 0, 7); fx.stroke();
+      fx.save(); fx.globalCompositeOperation = 'lighter';
+      const gr2 = Math.max(1, n.r * 0.55);
+      const gg = fx.createRadialGradient(n.x, n.y, 0, n.x, n.y, gr2);
+      gg.addColorStop(0, `hsla(45,100%,85%,${0.55 * n.life})`); gg.addColorStop(1, 'hsla(30,100%,55%,0)');
+      fx.fillStyle = gg; fx.beginPath(); fx.arc(n.x, n.y, gr2, 0, 7); fx.fill();
+      fx.strokeStyle = `hsla(40,100%,75%,${0.6 * n.life})`; fx.lineWidth = 2;
+      for (let k = 0; k < 9; k++) { const a2 = k * 2.4 + n.r * 0.01, len = n.r * (0.75 + ((k * 37) % 10) / 22); fx.beginPath(); fx.moveTo(n.x + Math.cos(a2) * n.r * 0.3, n.y + Math.sin(a2) * n.r * 0.3); fx.lineTo(n.x + Math.cos(a2) * len, n.y + Math.sin(a2) * len); fx.stroke(); }
+      fx.strokeStyle = `hsla(28,100%,62%,${0.45 * n.life})`; fx.lineWidth = 3;
+      for (let k = 0; k < 3; k++) { const st = k * 2.1 + n.r * 0.02; fx.beginPath(); fx.arc(n.x, n.y, n.r, st, st + 1.5); fx.stroke(); }
+      fx.restore();
     }
 
     for (let i = fed.length - 1; i >= 0; i--) {
@@ -728,7 +788,7 @@ void main() {
       s.vy += (dx / dist) * pull * dt * 22;
       s.vx *= 0.995; s.vy *= 0.995;
       s.x += s.vx * dt * 3.2; s.y += s.vy * dt * 3.2;
-      const stretch = Math.min(26, Math.hypot(s.vx, s.vy) * 0.09);
+      const stretch = Math.min(13, Math.hypot(s.vx, s.vy) * 0.09);
       fx.save(); fx.translate(s.x, s.y); fx.rotate(Math.atan2(s.vy, s.vx));
       const g = fx.createRadialGradient(0, 0, 0, 0, 0, 8);
       g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(150,180,255,0)');
@@ -744,18 +804,28 @@ void main() {
       if (p >= 1) { shows.splice(i, 1); continue; }
       const fadeIO = Math.sin(Math.PI * Math.min(1, p * 1.15));
       if (sh.kind === 'solarflare') {
-        const rim = (ang) => { const ex = Math.cos(ang) * hr, ey = Math.sin(ang) * hr * 0.42; const c = Math.cos(-0.35), s = Math.sin(-0.35); return { x: hp.x + ex * c - ey * s, y: hp.y + ex * s + ey * c }; };
-        const A = rim(sh.a), B = rim(sh.a + 0.55), mid = rim(sh.a + 0.27);
-        const lift = 1 + 0.55 * Math.sin(Math.PI * p);
-        const mx = hp.x + (mid.x - hp.x) * lift, my = hp.y + (mid.y - hp.y) * lift;
+        const sun = { x: W * 0.85, y: H * 0.13, r: Math.max(10, Math.min(W, H) * 0.03) };
+        const dirA = Math.atan2(hp.y - sun.y, hp.x - sun.x) + sh.a;
+        const A = { x: sun.x + Math.cos(dirA - 0.42) * sun.r * 0.95, y: sun.y + Math.sin(dirA - 0.42) * sun.r * 0.95 };
+        const B = { x: sun.x + Math.cos(dirA + 0.42) * sun.r * 0.95, y: sun.y + Math.sin(dirA + 0.42) * sun.r * 0.95 };
+        const lift = sun.r * (2.4 + 3.6 * Math.sin(Math.PI * p));
+        const mx = sun.x + Math.cos(dirA) * lift, my = sun.y + Math.sin(dirA) * lift;
         const al = Math.sin(Math.PI * p);
         fx.save(); fx.globalCompositeOperation = 'lighter'; fx.lineCap = 'round';
-        for (const [w, col] of [[8, `rgba(255,110,30,${0.30 * al})`], [4, `rgba(255,175,70,${0.55 * al})`], [1.8, `rgba(255,242,214,${0.9 * al})`]]) {
+        for (const [w, col] of [[10, `rgba(255,110,30,${0.30 * al})`], [5, `rgba(255,175,70,${0.55 * al})`], [2.2, `rgba(255,242,214,${0.9 * al})`]]) {
           fx.strokeStyle = col; fx.lineWidth = w; fx.beginPath(); fx.moveTo(A.x, A.y); fx.quadraticCurveTo(mx, my, B.x, B.y); fx.stroke();
         }
-        const g = fx.createRadialGradient(A.x, A.y, 0, A.x, A.y, 26);
-        g.addColorStop(0, `rgba(255,220,170,${0.8 * al})`); g.addColorStop(1, 'rgba(255,140,40,0)');
-        fx.fillStyle = g; fx.beginPath(); fx.arc(A.x, A.y, 26, 0, 7); fx.fill();
+        const g = fx.createRadialGradient(A.x, A.y, 0, A.x, A.y, 30);
+        g.addColorStop(0, `rgba(255,220,170,${0.85 * al})`); g.addColorStop(1, 'rgba(255,140,40,0)');
+        fx.fillStyle = g; fx.beginPath(); fx.arc(A.x, A.y, 30, 0, 7); fx.fill();
+        for (let k = 0; k < 12; k++) {
+          const ph = (k * 0.618 + p * 1.15) % 1;
+          const ea = dirA + ((k % 5) - 2) * 0.11;
+          const dist = sun.r * (1.2 + ph * 6.5);
+          const ex = sun.x + Math.cos(ea) * dist, ey = sun.y + Math.sin(ea) * dist;
+          fx.strokeStyle = `rgba(255,190,110,${(1 - ph) * al * 0.8})`; fx.lineWidth = 1.6;
+          fx.beginPath(); fx.moveTo(ex, ey); fx.lineTo(ex - Math.cos(ea) * sun.r * 0.7, ey - Math.sin(ea) * sun.r * 0.7); fx.stroke();
+        }
         fx.restore();
       } else if (sh.kind === 'ship') {
         const xn = p < 0.42 ? 0.06 + (p / 0.42) * 0.38 : p < 0.62 ? 0.44 + ((p - 0.42) / 0.20) * 0.06 : 0.50 + ((p - 0.62) / 0.38) * 0.56;
@@ -785,12 +855,14 @@ void main() {
         const ang = Math.atan2(y1 - y0, x1 - x0);
         fx.save(); fx.globalAlpha = fadeIO;
         fx.strokeStyle = 'rgba(190,210,255,0.25)'; fx.lineWidth = 1;
-        fx.beginPath(); fx.moveTo(sx - Math.cos(ang) * 64, sy - Math.sin(ang) * 64); fx.lineTo(sx, sy); fx.stroke();
+        fx.beginPath(); fx.moveTo(sx - Math.cos(ang) * 90, sy - Math.sin(ang) * 90); fx.lineTo(sx, sy); fx.stroke();
         fx.translate(sx, sy); fx.rotate(ang);
-        fx.fillStyle = '#cfd8e6'; fx.fillRect(-2.5, -2.5, 5, 5);
-        fx.fillStyle = '#5f7fb8'; fx.fillRect(-11, -1.8, 7, 3.6); fx.fillRect(4, -1.8, 7, 3.6);
+        fx.fillStyle = '#e6edf7'; fx.fillRect(-6.5, -6.5, 13, 13);
+        fx.fillStyle = '#42506a'; fx.fillRect(-6.5, -1.5, 13, 3);
+        fx.fillStyle = '#6f97d8'; fx.fillRect(-27, -4.5, 17, 9); fx.fillRect(10, -4.5, 17, 9);
+        fx.fillStyle = 'rgba(230,242,255,0.65)'; fx.fillRect(-19, -4.5, 1.4, 9); fx.fillRect(18, -4.5, 1.4, 9);
         fx.restore();
-        if ((sh.t % 0.8) < 0.4) { fx.save(); fx.fillStyle = `rgba(255,255,255,${0.9 * fadeIO})`; fx.beginPath(); fx.arc(sx, sy, 1.9, 0, 7); fx.fill(); fx.restore(); }
+        if ((sh.t % 0.8) < 0.4) { fx.save(); fx.fillStyle = `rgba(255,255,255,${0.95 * fadeIO})`; fx.beginPath(); fx.arc(sx, sy, 4.2, 0, 7); fx.fill(); fx.restore(); }
       } else if (sh.kind === 'pulsar') {
         const rot = sh.t * 2.4 + sh.seed;
         const strobe = 0.35 + 0.65 * Math.pow(0.5 + 0.5 * Math.sin(sh.t * 14), 2);
@@ -798,15 +870,15 @@ void main() {
         for (const s of [0, Math.PI]) {
           const a = rot + s, bx = sh.x + Math.cos(a) * 118, by = sh.y + Math.sin(a) * 118;
           const g = fx.createLinearGradient(sh.x, sh.y, bx, by);
-          g.addColorStop(0, `rgba(190,220,255,${0.50 * strobe * fadeIO})`); g.addColorStop(1, 'rgba(140,180,255,0)');
+          g.addColorStop(0, `rgba(200,228,255,${0.80 * strobe * fadeIO})`); g.addColorStop(1, 'rgba(140,180,255,0)');
           fx.fillStyle = g; fx.beginPath(); fx.moveTo(sh.x, sh.y);
-          fx.lineTo(sh.x + Math.cos(a - 0.085) * 118, sh.y + Math.sin(a - 0.085) * 118);
-          fx.lineTo(sh.x + Math.cos(a + 0.085) * 118, sh.y + Math.sin(a + 0.085) * 118);
+          fx.lineTo(sh.x + Math.cos(a - 0.11) * 128, sh.y + Math.sin(a - 0.11) * 128);
+          fx.lineTo(sh.x + Math.cos(a + 0.11) * 128, sh.y + Math.sin(a + 0.11) * 128);
           fx.closePath(); fx.fill();
         }
-        const g2 = fx.createRadialGradient(sh.x, sh.y, 0, sh.x, sh.y, 12);
+        const g2 = fx.createRadialGradient(sh.x, sh.y, 0, sh.x, sh.y, 15);
         g2.addColorStop(0, `rgba(255,255,255,${0.95 * fadeIO})`); g2.addColorStop(1, 'rgba(160,190,255,0)');
-        fx.fillStyle = g2; fx.beginPath(); fx.arc(sh.x, sh.y, 12, 0, 7); fx.fill();
+        fx.fillStyle = g2; fx.beginPath(); fx.arc(sh.x, sh.y, 15, 0, 7); fx.fill();
         fx.restore();
       } else if (sh.kind === 'eclipse') {
         const R = hr * 0.30;
@@ -820,12 +892,22 @@ void main() {
           g.addColorStop(0, `rgba(2,2,10,${0.38 * cover})`); g.addColorStop(1, 'rgba(0,0,0,0)');
           fx.fillStyle = g; fx.fillRect(hp.x - hr, hp.y - hr, hr * 2, hr * 2);
           const cg = fx.createRadialGradient(cx, cy, R * 0.92, cx, cy, R * 1.5);
-          cg.addColorStop(0, 'rgba(255,244,214,0)'); cg.addColorStop(0.55, `rgba(255,244,214,${0.5 * cover})`); cg.addColorStop(1, 'rgba(255,244,214,0)');
+          cg.addColorStop(0, 'rgba(255,244,214,0)'); cg.addColorStop(0.55, `rgba(255,244,214,${0.85 * cover})`); cg.addColorStop(1, 'rgba(255,244,214,0)');
           fx.fillStyle = cg; fx.beginPath(); fx.arc(cx, cy, R * 1.5, 0, 7); fx.fill();
         }
         fx.fillStyle = '#01020a'; fx.beginPath(); fx.arc(cx, cy, R, 0, 7); fx.fill();
-        fx.strokeStyle = `rgba(200,215,255,${0.25 + 0.4 * cover})`; fx.lineWidth = 1.2;
+        fx.strokeStyle = `rgba(220,232,255,${0.35 + 0.55 * cover})`; fx.lineWidth = 1.8;
         fx.beginPath(); fx.arc(cx, cy, R, 0, 7); fx.stroke();
+        fx.restore();
+      } else if (sh.kind === 'starbirth') {
+        const bloom = Math.sin(Math.PI * Math.min(1, p));
+        fx.save(); fx.globalCompositeOperation = 'lighter';
+        const g3 = fx.createRadialGradient(sh.x, sh.y, 0, sh.x, sh.y, 40);
+        g3.addColorStop(0, `rgba(255,255,255,${0.9 * bloom})`); g3.addColorStop(0.4, `rgba(190,220,255,${0.45 * bloom})`); g3.addColorStop(1, 'rgba(150,180,255,0)');
+        fx.fillStyle = g3; fx.beginPath(); fx.arc(sh.x, sh.y, 40, 0, 7); fx.fill();
+        fx.strokeStyle = `rgba(255,255,255,${0.7 * bloom})`; fx.lineWidth = 1.4;
+        const L = 6 + p * 22;
+        fx.beginPath(); fx.moveTo(sh.x - L, sh.y); fx.lineTo(sh.x + L, sh.y); fx.moveTo(sh.x, sh.y - L); fx.lineTo(sh.x, sh.y + L); fx.stroke();
         fx.restore();
       } else if (sh.kind === 'aurora') {
         const env = Math.sin(Math.PI * Math.min(1, p));
